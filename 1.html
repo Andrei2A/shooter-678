@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Tactical FPS Gameplay View</title>
+<!-- Fonts -->
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<!-- Tailwind CSS -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#ec7f13",
+                        "background-light": "#f8f7f6",
+                        "background-dark": "#221910",
+                    },
+                    fontFamily: {
+                        "display": ["Space Grotesk", "sans-serif"]
+                    },
+                    borderRadius: {"DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px"},
+                },
+            },
+        }
+    </script>
+<style>
+        /* Custom cinematic effects */
+        .cinematic-vignette {
+            background: radial-gradient(circle, transparent 50%, rgba(0, 0, 0, 0.8) 100%);
+            pointer-events: none;
+        }
+        .film-grain {
+            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)' opacity='0.08'/%3E%3C/svg%3E");
+            pointer-events: none;
+        }
+        /* Hide scrollbars for full immersion */
+        body {
+            overflow: hidden;
+        }
+    </style>
+</head>
+<body class="bg-background-light dark:bg-background-dark font-display text-slate-900 dark:text-slate-100 h-screen w-screen relative overflow-hidden flex flex-col">
+<!-- Main Gameplay Viewport -->
+<main class="relative w-full h-full flex-grow z-0">
+<!-- Background Scene (Corridor) -->
+<div class="absolute inset-0 w-full h-full bg-cover bg-center bg-no-repeat" data-alt="Dark gritty apartment corridor with realistic lighting and shadows" style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuDNvWRB8fh7fMJf5L-YF2QM92oFO5CzBHCAyddsgha3G9ZGqt6oRNPemj-o-Gyb12sZT6ytE8FKG6bLypFfo3R1CLDDokgouWvd1fck1Nu4lITkstiEdbGmZsXs7XtKUkY1yKzLm5Jjht_9fiOYHAZrQqPf9c_O9LXmvOZSAlCs-fgVCax2RGEXZuDOhogtn_QzNFCCqM5GpUGCrMacvlVslVhwAz3PUEI_WBOR5vVxcdTTGAnv2mro_KGrBkEtFA6I59l6S8inlXs');">
+<!-- Overlay for moody lighting -->
+<div class="absolute inset-0 bg-[#120d08]/60 mix-blend-multiply"></div>
+</div>
+<!-- Interactive Elements Layer (Door interactions, hints - visible but diegetic) -->
+<div class="absolute inset-0 pointer-events-none flex items-center justify-center">
+<!-- Crosshair (Minimalist) -->
+<div class="w-1 h-1 bg-white/50 rounded-full shadow-[0_0_4px_rgba(255,255,255,0.8)]"></div>
+</div>
+<!-- Weapon Layer (First Person View) -->
+<div class="absolute bottom-[-5%] right-[-10%] w-[140%] md:w-[80%] lg:w-[60%] h-auto pointer-events-none select-none z-10 flex justify-end items-end transition-transform duration-100 ease-out hover:translate-y-1">
+<img alt="First person view holding a tactical shotgun" class="object-contain drop-shadow-2xl brightness-75 contrast-125" data-alt="First person perspective holding a tactical shotgun weapon" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCXMSkXXt3MiE2cksqMnaS3fNCjIvvjEB9m7s5f_qAxqvzps7vvKqrttCM-mqJc3cGGCr8XUxPrT8Dl61w2oAl8a9QiGUj8nWgVxhBmNSIll4GLn9WpV_ZDrpo4BwO_UCaVyiteMaoCvRQUytOxfwuVWte8pn9NgqRPzdqkFFcJmE2p8lKOVVpA4GLb73HUbjTMfjyb4JWIT_b1meffLGH-a59y-HVgXJyRsPytxrPKM9Hsfkf3reaAf5knv31JsoL4DG78PWw8yWc"/>
+</div>
+<!-- Cinematic Effects Overlay -->
+<div class="cinematic-vignette absolute inset-0 z-20 w-full h-full"></div>
+<div class="film-grain absolute inset-0 z-30 w-full h-full opacity-40 mix-blend-overlay"></div>
+<!-- Minimal UI - "Pause" or Menu Hint (Top Right) -->
+<div class="absolute top-6 right-6 z-40">
+<button class="group p-2 rounded-full bg-black/20 backdrop-blur-sm border border-white/10 hover:bg-primary/20 hover:border-primary/50 transition-all duration-300">
+<span class="material-symbols-outlined text-white/50 group-hover:text-primary text-2xl" data-icon="pause">pause</span>
+</button>
+</div>
+<!-- Context Action Hint (Appears near the ajar door) -->
+<div class="absolute top-[45%] left-[55%] z-10 flex flex-col items-center gap-1 opacity-80 animate-pulse">
+<div class="w-8 h-8 rounded-full border border-white/80 flex items-center justify-center bg-black/40 backdrop-blur-md">
+<span class="text-xs font-bold text-white tracking-widest">E</span>
+</div>
+<span class="text-[10px] uppercase tracking-[0.2em] text-white/70 font-medium text-shadow-sm">Breach</span>
+</div>
+</main>
+<!-- Bottom Menu / Overlay (Hidden by default or minimal presence) -->
+<!-- Since request specifically asked for NO HUD, we keep this extremely minimal or purely atmospheric -->
+<!-- Immersion Details -->
+<div class="absolute bottom-4 left-6 z-40 flex flex-col gap-1 pointer-events-none">
+<div class="flex items-center gap-2">
+<div class="h-1 w-1 bg-primary rounded-full animate-ping"></div>
+<span class="text-[10px] font-bold text-primary/80 tracking-[0.2em] uppercase">Live Feed</span>
+</div>
+<div class="text-[10px] text-white/30 tracking-widest font-mono">CAM_UNIT_04 // REC</div>
+</div>
+</body></html>

@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Breach &amp; Clear Start Screen</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "primary": "#ec7f13",
+              "background-light": "#f8f7f6",
+              "background-dark": "#221910",
+              "surface-dark": "#2d2218",
+              "surface-light": "#ffffff",
+            },
+            fontFamily: {
+              "display": ["Space Grotesk", "sans-serif"]
+            },
+            borderRadius: {"DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px"},
+            backgroundImage: {
+               'vignette': 'radial-gradient(circle, rgba(0,0,0,0) 50%, rgba(34,25,16,0.9) 100%)',
+            }
+          },
+        },
+      }
+    </script>
+<style>
+        /* Custom scrollbar for better immersion */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #221910; 
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #ec7f13; 
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #d6710f; 
+        }
+    </style>
+</head>
+<body class="bg-background-light dark:bg-background-dark font-display text-slate-900 dark:text-slate-100 min-h-screen flex flex-col overflow-hidden">
+<!-- Main Container -->
+<div class="relative flex h-screen w-full flex-col overflow-hidden">
+<!-- Background Image with Overlay -->
+<div class="absolute inset-0 z-0 bg-center bg-no-repeat bg-cover" data-alt="Close up of a tactical shotgun resting against a worn wooden texture" style='background-image: url("https://lh3.googleusercontent.com/aida-public/AB6AXuC2SmtlWtH5BL6BfuSpZfOdqpqkDA2Og7Aemg6mg3yZpBRCHtetxon7URKWrHmEVxYPuBD88fMV_l8QBg0rAN1JG57wc4f3fc_GiC7jenCvTVsk4M6tycKOzmkGFSAQeeMXMwBQ0OVKo2W7kIAqpGvhNJULxmlAVllS69bFa9-XaiE1eR4sfkzxbHM3IbErX3wfll4_OrCJcrNm4JFsYSXGkbZ0x4PnuT7YuZE-YaXjnf_XpiV3I9RKeBBL3r8p_ID6ECMUwN43VjA");'>
+<!-- Dark Overlay for Readability -->
+<div class="absolute inset-0 bg-black/40 mix-blend-multiply"></div>
+<!-- Vignette Effect -->
+<div class="absolute inset-0 bg-vignette pointer-events-none"></div>
+<!-- Bottom Fade Gradient -->
+<div class="absolute inset-x-0 bottom-0 h-1/2 bg-gradient-to-t from-background-dark via-background-dark/80 to-transparent"></div>
+</div>
+<!-- Top Navigation / Status (Optional for game feel) -->
+<div class="relative z-10 w-full px-8 py-6 flex justify-between items-start">
+<div class="flex items-center gap-2 opacity-70">
+<span class="material-symbols-outlined text-primary text-xl">signal_cellular_alt</span>
+<span class="text-xs font-bold tracking-widest text-slate-300">SERVER: US-EAST-1</span>
+</div>
+<div class="flex items-center gap-4">
+<button class="p-2 rounded-full hover:bg-white/10 transition-colors text-slate-300 hover:text-primary">
+<span class="material-symbols-outlined">settings</span>
+</button>
+</div>
+</div>
+<!-- Main Content Area -->
+<div class="relative z-10 flex flex-1 flex-col items-center justify-end pb-12 w-full max-w-[1200px] mx-auto px-4">
+<!-- Game Title -->
+<div class="mb-12 text-center transform translate-y-4">
+<div class="inline-flex items-center gap-2 mb-2 px-3 py-1 rounded border border-primary/30 bg-primary/10 backdrop-blur-sm">
+<span class="w-2 h-2 rounded-full bg-primary animate-pulse"></span>
+<span class="text-primary text-xs font-bold tracking-widest uppercase">Early Access v0.8.2</span>
+</div>
+<h1 class="text-6xl md:text-8xl font-bold tracking-tighter text-transparent bg-clip-text bg-gradient-to-b from-white to-slate-400 drop-shadow-2xl uppercase" style="-webkit-text-stroke: 1px rgba(255,255,255,0.1);">
+                    Breach <span class="text-primary">&amp;</span> Clear
+                </h1>
+<p class="text-slate-400 tracking-[0.2em] text-sm md:text-base mt-2 font-light uppercase">Tactical Operations Simulator</p>
+</div>
+<!-- Action Buttons Container -->
+<div class="flex flex-col items-center gap-4 w-full max-w-md">
+<!-- PLAY Button -->
+<button class="group relative flex w-full cursor-pointer items-center justify-center overflow-hidden rounded-lg h-16 bg-primary hover:bg-orange-600 text-background-dark transition-all duration-300 shadow-[0_0_20px_rgba(236,127,19,0.3)] hover:shadow-[0_0_30px_rgba(236,127,19,0.5)]">
+<!-- Button Glitch/Scanline effect overlay -->
+<div class="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0IiBoZWlnaHQ9IjQiPgo8cmVjdCB3aWR0aD0iNCIgaGVpZ2h0PSI0IiBmaWxsPSIjZmZmIiBmaWxsLW9wYWNpdHk9IjAuMDUiLz4KPC9zdmc+')] opacity-20 pointer-events-none"></div>
+<span class="material-symbols-outlined mr-3 text-3xl group-hover:scale-110 transition-transform">play_arrow</span>
+<span class="text-xl font-bold tracking-widest uppercase">Deploy Now</span>
+<!-- Decorative corner accents -->
+<div class="absolute top-1 right-1 w-2 h-2 border-t-2 border-r-2 border-background-dark/50 rounded-tr-sm"></div>
+<div class="absolute bottom-1 left-1 w-2 h-2 border-b-2 border-l-2 border-background-dark/50 rounded-bl-sm"></div>
+</button>
+<!-- Secondary Options Grid -->
+<div class="grid grid-cols-2 gap-3 w-full">
+<button class="flex items-center justify-center h-12 rounded-lg bg-surface-dark/80 hover:bg-surface-dark border border-white/5 hover:border-primary/50 text-slate-200 transition-all group backdrop-blur-sm">
+<span class="material-symbols-outlined mr-2 text-sm group-hover:text-primary transition-colors">military_tech</span>
+<span class="text-sm font-bold tracking-wider uppercase">Loadout</span>
+</button>
+<button class="flex items-center justify-center h-12 rounded-lg bg-surface-dark/80 hover:bg-surface-dark border border-white/5 hover:border-primary/50 text-slate-200 transition-all group backdrop-blur-sm">
+<span class="material-symbols-outlined mr-2 text-sm group-hover:text-primary transition-colors">group</span>
+<span class="text-sm font-bold tracking-wider uppercase">Squad</span>
+</button>
+</div>
+<!-- EXIT Button -->
+<button class="mt-2 flex w-full max-w-[200px] cursor-pointer items-center justify-center rounded-lg h-10 px-4 text-slate-500 hover:text-white hover:bg-white/5 transition-all text-sm font-bold tracking-widest uppercase group">
+<span class="w-0 overflow-hidden group-hover:w-4 transition-all duration-300 opacity-0 group-hover:opacity-100 mr-0 group-hover:mr-2">
+<span class="material-symbols-outlined text-sm">logout</span>
+</span>
+<span>Exit to Desktop</span>
+</button>
+</div>
+</div>
+<!-- Footer / Credits -->
+<div class="relative z-10 w-full px-8 py-4 flex justify-between items-end text-[10px] text-slate-600 uppercase tracking-wider">
+<div>
+<p>© 2024 Tactical Systems Inc.</p>
+<p>All rights reserved.</p>
+</div>
+<div class="flex gap-4">
+<a class="hover:text-primary transition-colors" href="#">Terms</a>
+<a class="hover:text-primary transition-colors" href="#">Privacy</a>
+<a class="hover:text-primary transition-colors" href="#">Support</a>
+</div>
+</div>
+</div>
+</body></html>

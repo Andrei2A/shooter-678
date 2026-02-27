@@ -1,0 +1,3320 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Breach &amp; Clear</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    overflow: hidden;
+    background: #221910;
+    font-family: 'Space Grotesk', sans-serif;
+    color: #e2e8f0;
+    width: 100vw;
+    height: 100vh;
+}
+canvas#gameCanvas {
+    display: block;
+    width: 100vw;
+    height: 100vh;
+    position: fixed;
+    top: 0; left: 0;
+    z-index: 0;
+}
+
+/* ===== UI OVERLAY ===== */
+#uiOverlay {
+    position: fixed;
+    top: 0; left: 0;
+    width: 100vw; height: 100vh;
+    z-index: 10;
+    pointer-events: none;
+}
+
+/* Crosshair */
+#crosshair {
+    position: absolute;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    pointer-events: none;
+    display: none;
+}
+#crosshair .dot {
+    width: 3px; height: 3px;
+    background: rgba(255,255,255,0.7);
+    border-radius: 50%;
+    box-shadow: 0 0 6px rgba(255,255,255,0.5);
+}
+
+/* Vignette */
+#vignette {
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(circle, transparent 50%, rgba(0,0,0,0.7) 100%);
+    pointer-events: none;
+    display: none;
+}
+
+/* Blood vignette */
+#bloodVignette {
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(circle, transparent 30%, rgba(139,0,0,0.5) 70%, rgba(80,0,0,0.85) 90%, rgba(40,0,0,0.95) 100%);
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.3s;
+}
+
+/* Film grain */
+#filmGrain {
+    position: absolute;
+    inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.08'/%3E%3C/svg%3E");
+    opacity: 0.3;
+    mix-blend-mode: overlay;
+    pointer-events: none;
+    display: none;
+}
+
+/* Interaction prompt */
+#interactionPrompt {
+    position: absolute;
+    top: 55%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    pointer-events: none;
+}
+#interactionPrompt .key {
+    width: 36px; height: 36px;
+    border-radius: 50%;
+    border: 2px solid rgba(255,255,255,0.8);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0,0,0,0.5);
+    backdrop-filter: blur(8px);
+    font-size: 14px;
+    font-weight: 700;
+    color: white;
+    letter-spacing: 0.15em;
+}
+#interactionPrompt .label {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.2em;
+    color: rgba(255,255,255,0.7);
+    font-weight: 500;
+}
+
+/* ===== SCREENS ===== */
+.screen {
+    position: absolute;
+    inset: 0;
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    pointer-events: auto;
+    z-index: 100;
+}
+
+/* Menu screen */
+#menuScreen {
+    background: #221910;
+    overflow: hidden;
+}
+#menuScreen .bg {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(135deg, #221910 0%, #1a120a 50%, #221910 100%);
+}
+#menuScreen .bg::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(circle at 50% 50%, transparent 40%, rgba(34,25,16,0.95) 100%);
+}
+#menuScreen .content {
+    position: relative;
+    z-index: 2;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+}
+#menuScreen .version-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 12px;
+    border-radius: 4px;
+    border: 1px solid rgba(236,127,19,0.3);
+    background: rgba(236,127,19,0.1);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: #ec7f13;
+}
+#menuScreen .version-badge .dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: #ec7f13;
+    animation: pulse 2s infinite;
+}
+#menuScreen h1 {
+    font-size: clamp(48px, 10vw, 96px);
+    font-weight: 700;
+    letter-spacing: -0.03em;
+    text-transform: uppercase;
+    background: linear-gradient(to bottom, #fff, #94a3b8);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    text-shadow: none;
+    line-height: 1;
+}
+#menuScreen h1 .amp {
+    -webkit-text-fill-color: #ec7f13;
+}
+#menuScreen .subtitle {
+    color: #94a3b8;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    font-size: 14px;
+    font-weight: 300;
+    margin-top: -4px;
+}
+#menuScreen .deploy-btn {
+    margin-top: 24px;
+    width: 320px;
+    height: 56px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    background: #ec7f13;
+    color: #221910;
+    border: none;
+    border-radius: 8px;
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 18px;
+    font-weight: 700;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: all 0.3s;
+    box-shadow: 0 0 20px rgba(236,127,19,0.3);
+    position: relative;
+    overflow: hidden;
+}
+#menuScreen .deploy-btn:hover {
+    background: #d6710f;
+    box-shadow: 0 0 30px rgba(236,127,19,0.5);
+    transform: scale(1.02);
+}
+#menuScreen .deploy-btn .arrow {
+    font-size: 28px;
+    transition: transform 0.3s;
+}
+#menuScreen .deploy-btn:hover .arrow {
+    transform: scale(1.15);
+}
+#menuScreen .controls-info {
+    margin-top: 32px;
+    display: flex;
+    gap: 24px;
+    opacity: 0.5;
+    font-size: 11px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+}
+#menuScreen .controls-info span {
+    color: #94a3b8;
+}
+#menuScreen .controls-info kbd {
+    color: #ec7f13;
+    font-weight: 600;
+}
+
+/* Death screen */
+#deathScreen {
+    background: rgba(20,0,0,0.85);
+    backdrop-filter: blur(4px);
+}
+#deathScreen .content {
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+}
+#deathScreen h2 {
+    font-size: 48px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: #b91c1c;
+    text-shadow: 0 0 30px rgba(185,28,28,0.5);
+}
+#deathScreen .retry-btn {
+    margin-top: 16px;
+    width: 240px;
+    height: 48px;
+    background: transparent;
+    border: 2px solid #b91c1c;
+    color: #fca5a5;
+    border-radius: 8px;
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 16px;
+    font-weight: 700;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: all 0.3s;
+}
+#deathScreen .retry-btn:hover {
+    background: #b91c1c;
+    color: white;
+    box-shadow: 0 0 20px rgba(185,28,28,0.5);
+}
+
+/* Victory screen */
+#victoryScreen {
+    background: rgba(10,15,8,0.85);
+    backdrop-filter: blur(4px);
+}
+#victoryScreen .content {
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+}
+#victoryScreen h2 {
+    font-size: 48px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: #ec7f13;
+    text-shadow: 0 0 30px rgba(236,127,19,0.5);
+}
+#victoryScreen .sub {
+    color: #94a3b8;
+    font-size: 14px;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+}
+#victoryScreen .menu-btn {
+    margin-top: 16px;
+    width: 240px;
+    height: 48px;
+    background: #ec7f13;
+    border: none;
+    color: #221910;
+    border-radius: 8px;
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 16px;
+    font-weight: 700;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: all 0.3s;
+    box-shadow: 0 0 20px rgba(236,127,19,0.3);
+}
+#victoryScreen .menu-btn:hover {
+    background: #d6710f;
+    box-shadow: 0 0 30px rgba(236,127,19,0.5);
+}
+
+/* Live feed indicator */
+#liveFeed {
+    position: absolute;
+    bottom: 16px;
+    left: 24px;
+    display: none;
+    flex-direction: column;
+    gap: 4px;
+    pointer-events: none;
+}
+#liveFeed .row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+#liveFeed .ping {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: #ec7f13;
+    animation: pulse 2s infinite;
+}
+#liveFeed .tag {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: rgba(236,127,19,0.8);
+}
+#liveFeed .cam {
+    font-size: 10px;
+    color: rgba(255,255,255,0.3);
+    letter-spacing: 0.15em;
+    font-family: monospace;
+}
+
+/* Kill counter */
+#killCounter {
+    position: absolute;
+    bottom: 16px;
+    right: 24px;
+    display: none;
+    font-size: 11px;
+    color: rgba(255,255,255,0.3);
+    letter-spacing: 0.15em;
+    font-family: monospace;
+    pointer-events: none;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.3; }
+}
+
+@keyframes screenShake {
+    0%, 100% { transform: translate(0, 0); }
+    25% { transform: translate(-3px, 2px); }
+    50% { transform: translate(2px, -3px); }
+    75% { transform: translate(-2px, 1px); }
+}
+</style>
+</head>
+<body>
+<canvas id="gameCanvas"></canvas>
+
+<div id="uiOverlay">
+    <div id="crosshair"><div class="dot"></div></div>
+    <div id="vignette"></div>
+    <div id="bloodVignette"></div>
+    <div id="filmGrain"></div>
+    <div id="interactionPrompt">
+        <div class="key">F</div>
+        <div class="label">Breach</div>
+    </div>
+    <div id="liveFeed">
+        <div class="row"><div class="ping"></div><span class="tag">Live Feed</span></div>
+        <div class="cam">CAM_UNIT_04 // REC</div>
+    </div>
+    <div id="killCounter">TARGETS: 0 / 10</div>
+</div>
+
+<!-- Menu Screen -->
+<div id="menuScreen" class="screen">
+    <div class="bg"></div>
+    <div class="content">
+        <div class="version-badge">
+            <div class="dot"></div>
+            <span>Early Access v0.8.2</span>
+        </div>
+        <h1>Breach <span class="amp">&amp;</span> Clear</h1>
+        <div class="subtitle">Tactical Operations Simulator</div>
+        <button class="deploy-btn" id="deployBtn">
+            <span class="arrow">&#9654;</span>
+            <span>Deploy Now</span>
+        </button>
+        <div class="controls-info">
+            <span><kbd>WASD</kbd> Move</span>
+            <span><kbd>Mouse</kbd> Aim</span>
+            <span><kbd>LMB</kbd> Fire</span>
+            <span><kbd>RMB</kbd> ADS</span>
+            <span><kbd>F</kbd> Breach</span>
+            <span><kbd>R</kbd> Reload</span>
+        </div>
+    </div>
+</div>
+
+<!-- Death Screen -->
+<div id="deathScreen" class="screen">
+    <div class="content">
+        <h2>Mission Failed</h2>
+        <p style="color:#94a3b8;letter-spacing:0.15em;text-transform:uppercase;font-size:13px;">Operator Down</p>
+        <button class="retry-btn" id="retryBtn">Retry</button>
+    </div>
+</div>
+
+<!-- Victory Screen -->
+<div id="victoryScreen" class="screen">
+    <div class="content">
+        <h2>Building Clear</h2>
+        <div class="sub">All targets neutralized</div>
+        <button class="menu-btn" id="victoryBtn">Return to Menu</button>
+    </div>
+</div>
+
+<script type="importmap">
+{
+    "imports": {
+        "three": "https://unpkg.com/three@0.160.0/build/three.module.js"
+    }
+}
+</script>
+<script type="module">
+import * as THREE from 'three';
+
+// ============================================================
+// AABB - Axis-Aligned Bounding Box collision utility
+// ============================================================
+class AABB {
+    constructor(minX, minZ, maxX, maxZ, minY = 0, maxY = 3) {
+        this.minX = minX;
+        this.minZ = minZ;
+        this.maxX = maxX;
+        this.maxZ = maxZ;
+        this.minY = minY;
+        this.maxY = maxY;
+    }
+
+    containsPoint(x, z) {
+        return x >= this.minX && x <= this.maxX && z >= this.minZ && z <= this.maxZ;
+    }
+
+    intersectsSphere(cx, cz, r) {
+        const closestX = Math.max(this.minX, Math.min(cx, this.maxX));
+        const closestZ = Math.max(this.minZ, Math.min(cz, this.maxZ));
+        const dx = cx - closestX;
+        const dz = cz - closestZ;
+        return (dx * dx + dz * dz) < (r * r);
+    }
+
+    // Returns the push-out vector to resolve sphere-AABB collision
+    resolve(cx, cz, r) {
+        const closestX = Math.max(this.minX, Math.min(cx, this.maxX));
+        const closestZ = Math.max(this.minZ, Math.min(cz, this.maxZ));
+        const dx = cx - closestX;
+        const dz = cz - closestZ;
+        const dist = Math.sqrt(dx * dx + dz * dz);
+        if (dist < r && dist > 0.0001) {
+            const overlap = r - dist;
+            return { x: (dx / dist) * overlap, z: (dz / dist) * overlap };
+        }
+        // If center is inside the box
+        if (dist < 0.0001) {
+            const dists = [
+                cx - this.minX, this.maxX - cx,
+                cz - this.minZ, this.maxZ - cz
+            ];
+            const min = Math.min(...dists);
+            const idx = dists.indexOf(min);
+            if (idx === 0) return { x: -(min + r), z: 0 };
+            if (idx === 1) return { x: min + r, z: 0 };
+            if (idx === 2) return { x: 0, z: -(min + r) };
+            return { x: 0, z: min + r };
+        }
+        return null;
+    }
+}
+
+// ============================================================
+// Verlet Ragdoll Physics
+// ============================================================
+class VerletParticle {
+    constructor(x, y, z, mass = 1, radius = 0.1) {
+        this.pos = new THREE.Vector3(x, y, z);
+        this.prev = new THREE.Vector3(x, y, z);
+        this.mass = mass;
+        this.radius = radius;
+    }
+    applyImpulse(ix, iy, iz) {
+        this.prev.x -= ix / this.mass;
+        this.prev.y -= iy / this.mass;
+        this.prev.z -= iz / this.mass;
+    }
+    integrate(dt) {
+        const damping = 0.97;
+        const vx = (this.pos.x - this.prev.x) * damping;
+        const vy = (this.pos.y - this.prev.y) * damping;
+        const vz = (this.pos.z - this.prev.z) * damping;
+        this.prev.copy(this.pos);
+        this.pos.x += vx;
+        this.pos.y += vy - 9.8 * dt * dt;
+        this.pos.z += vz;
+    }
+    collideFloor() {
+        if (this.pos.y < this.radius) {
+            this.pos.y = this.radius;
+            const vy = this.pos.y - this.prev.y;
+            this.prev.y = this.pos.y + vy * 0.25; // bounce damping
+            // friction
+            this.prev.x = this.pos.x - (this.pos.x - this.prev.x) * 0.7;
+            this.prev.z = this.pos.z - (this.pos.z - this.prev.z) * 0.7;
+        }
+    }
+    collideWalls(colliders) {
+        for (const col of colliders) {
+            if (!col) continue;
+            if (col.intersectsSphere(this.pos.x, this.pos.z, this.radius)) {
+                const push = col.resolve(this.pos.x, this.pos.z, this.radius);
+                if (push) {
+                    this.pos.x += push.x;
+                    this.pos.z += push.z;
+                    if (Math.abs(push.x) > 0.001) this.prev.x = this.pos.x;
+                    if (Math.abs(push.z) > 0.001) this.prev.z = this.pos.z;
+                }
+            }
+        }
+    }
+}
+
+class DistConstraint {
+    constructor(a, b, dist) {
+        this.a = a;
+        this.b = b;
+        this.dist = dist !== undefined ? dist : a.pos.distanceTo(b.pos);
+    }
+    solve() {
+        const dx = this.b.pos.x - this.a.pos.x;
+        const dy = this.b.pos.y - this.a.pos.y;
+        const dz = this.b.pos.z - this.a.pos.z;
+        const d = Math.sqrt(dx * dx + dy * dy + dz * dz);
+        if (d < 0.0001) return;
+        const diff = (d - this.dist) / d;
+        const total = this.a.mass + this.b.mass;
+        const rA = this.b.mass / total;
+        const rB = this.a.mass / total;
+        this.a.pos.x += dx * diff * rA;
+        this.a.pos.y += dy * diff * rA;
+        this.a.pos.z += dz * diff * rA;
+        this.b.pos.x -= dx * diff * rB;
+        this.b.pos.y -= dy * diff * rB;
+        this.b.pos.z -= dz * diff * rB;
+    }
+}
+
+class Ragdoll {
+    constructor() {
+        this.particles = {};
+        this.constraints = [];
+        this.active = false;
+    }
+
+    init(worldX, worldZ, facingAngle) {
+        const cos = Math.cos(facingAngle);
+        const sin = Math.sin(facingAngle);
+        // Transform local position to world based on facing
+        const wp = (lx, ly, lz) => [
+            worldX + lx * cos + lz * sin,
+            ly,
+            worldZ - lx * sin + lz * cos
+        ];
+
+        const p = this.particles;
+        // Spine
+        p.head =      new VerletParticle(...wp(0, 1.75, 0), 4, 0.13);
+        p.neck =      new VerletParticle(...wp(0, 1.55, 0), 5, 0.06);
+        p.chest =     new VerletParticle(...wp(0, 1.25, 0), 20, 0.15);
+        p.hips =      new VerletParticle(...wp(0, 0.9, 0), 18, 0.13);
+        // Shoulders
+        p.lShoulder = new VerletParticle(...wp(-0.25, 1.42, 0), 3, 0.06);
+        p.rShoulder = new VerletParticle(...wp(0.25, 1.42, 0), 3, 0.06);
+        // Hands
+        p.lHand =     new VerletParticle(...wp(-0.4, 0.95, -0.1), 2, 0.05);
+        p.rHand =     new VerletParticle(...wp(0.4, 0.95, -0.1), 2, 0.05);
+        // Knees
+        p.lKnee =     new VerletParticle(...wp(-0.11, 0.42, 0), 5, 0.07);
+        p.rKnee =     new VerletParticle(...wp(0.11, 0.42, 0), 5, 0.07);
+        // Feet
+        p.lFoot =     new VerletParticle(...wp(-0.11, 0.06, 0), 3, 0.06);
+        p.rFoot =     new VerletParticle(...wp(0.11, 0.06, 0), 3, 0.06);
+
+        this.constraints = [
+            // Spine
+            new DistConstraint(p.head, p.neck),
+            new DistConstraint(p.neck, p.chest),
+            new DistConstraint(p.chest, p.hips),
+            // Shoulders to neck
+            new DistConstraint(p.neck, p.lShoulder),
+            new DistConstraint(p.neck, p.rShoulder),
+            // Shoulder width (keeps them apart)
+            new DistConstraint(p.lShoulder, p.rShoulder),
+            // Shoulders to chest (extra stability)
+            new DistConstraint(p.chest, p.lShoulder),
+            new DistConstraint(p.chest, p.rShoulder),
+            // Arms
+            new DistConstraint(p.lShoulder, p.lHand),
+            new DistConstraint(p.rShoulder, p.rHand),
+            // Legs
+            new DistConstraint(p.hips, p.lKnee),
+            new DistConstraint(p.hips, p.rKnee),
+            new DistConstraint(p.lKnee, p.lFoot),
+            new DistConstraint(p.rKnee, p.rFoot),
+            // Hip width (keep legs apart)
+            new DistConstraint(p.lKnee, p.rKnee, 0.25),
+        ];
+    }
+
+    activate(impulseDir, strength) {
+        this.active = true;
+        const s = strength || 10;
+        // Main impulse to chest
+        this.particles.chest.applyImpulse(
+            impulseDir.x * s,
+            impulseDir.y * s + 2,
+            impulseDir.z * s
+        );
+        // Smaller impulse to head (whiplash)
+        this.particles.head.applyImpulse(
+            impulseDir.x * s * 0.4,
+            impulseDir.y * s * 0.3 + 1,
+            impulseDir.z * s * 0.4
+        );
+    }
+
+    applyHitImpulse(impulseDir, strength) {
+        const s = strength || 8;
+        this.particles.chest.applyImpulse(
+            impulseDir.x * s,
+            impulseDir.y * s + 3,
+            impulseDir.z * s
+        );
+        this.particles.hips.applyImpulse(
+            impulseDir.x * s * 0.5,
+            2,
+            impulseDir.z * s * 0.5
+        );
+    }
+
+    update(dt, colliders) {
+        if (!this.active) return;
+        // Fixed timestep sub-stepping
+        const fixedDt = 1 / 120;
+        const steps = Math.min(Math.ceil(dt / fixedDt), 8);
+        for (let step = 0; step < steps; step++) {
+            for (const p of Object.values(this.particles)) {
+                p.integrate(fixedDt);
+            }
+            // Constraint solving (multiple iterations)
+            for (let i = 0; i < 5; i++) {
+                for (const c of this.constraints) {
+                    c.solve();
+                }
+            }
+            for (const p of Object.values(this.particles)) {
+                p.collideFloor();
+                if (colliders) p.collideWalls(colliders);
+            }
+        }
+    }
+
+    // Apply extra damping to settle the body
+    settle(amount) {
+        for (const p of Object.values(this.particles)) {
+            p.prev.lerp(p.pos, amount);
+        }
+    }
+
+    getPos(name) { return this.particles[name].pos; }
+}
+
+// Helper: orient a mesh so its local axis aligns with a direction
+function orientMeshAlongAxis(mesh, dir, localAxis) {
+    if (dir.lengthSq() < 0.0001) return;
+    const q = new THREE.Quaternion();
+    q.setFromUnitVectors(localAxis, dir.clone().normalize());
+    mesh.quaternion.copy(q);
+}
+
+// ============================================================
+// SoundManager - Procedural audio via Web Audio API
+// ============================================================
+class SoundManager {
+    constructor() {
+        this.ctx = null;
+        this.masterGain = null;
+        this.heartbeatInterval = null;
+    }
+
+    init() {
+        this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+        this.masterGain = this.ctx.createGain();
+        this.masterGain.gain.value = 0.5;
+        this.masterGain.connect(this.ctx.destination);
+    }
+
+    ensure() {
+        if (!this.ctx) this.init();
+        if (this.ctx.state === 'suspended') this.ctx.resume();
+    }
+
+    noise(duration, volume = 0.3) {
+        this.ensure();
+        const sr = this.ctx.sampleRate;
+        const buf = this.ctx.createBuffer(1, sr * duration, sr);
+        const data = buf.getChannelData(0);
+        for (let i = 0; i < data.length; i++) data[i] = (Math.random() * 2 - 1) * volume;
+        return buf;
+    }
+
+    playGunshot() {
+        this.ensure();
+        const ctx = this.ctx;
+        const t = ctx.currentTime;
+
+        // Low boom
+        const osc = ctx.createOscillator();
+        const oscGain = ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(150, t);
+        osc.frequency.exponentialRampToValueAtTime(40, t + 0.15);
+        oscGain.gain.setValueAtTime(0.8, t);
+        oscGain.gain.exponentialRampToValueAtTime(0.001, t + 0.2);
+        osc.connect(oscGain);
+        oscGain.connect(this.masterGain);
+        osc.start(t);
+        osc.stop(t + 0.2);
+
+        // Noise burst (high crack)
+        const noiseBuf = this.noise(0.1, 1.0);
+        const noiseSrc = ctx.createBufferSource();
+        noiseSrc.buffer = noiseBuf;
+        const noiseGain = ctx.createGain();
+        noiseGain.gain.setValueAtTime(0.6, t);
+        noiseGain.gain.exponentialRampToValueAtTime(0.001, t + 0.08);
+        const hp = ctx.createBiquadFilter();
+        hp.type = 'highpass';
+        hp.frequency.value = 2000;
+        noiseSrc.connect(hp);
+        hp.connect(noiseGain);
+        noiseGain.connect(this.masterGain);
+        noiseSrc.start(t);
+
+        // Mid punch
+        const osc2 = ctx.createOscillator();
+        const osc2Gain = ctx.createGain();
+        osc2.type = 'sawtooth';
+        osc2.frequency.setValueAtTime(300, t);
+        osc2.frequency.exponentialRampToValueAtTime(80, t + 0.1);
+        osc2Gain.gain.setValueAtTime(0.4, t);
+        osc2Gain.gain.exponentialRampToValueAtTime(0.001, t + 0.12);
+        osc2.connect(osc2Gain);
+        osc2Gain.connect(this.masterGain);
+        osc2.start(t);
+        osc2.stop(t + 0.12);
+    }
+
+    playReloadShell() {
+        this.ensure();
+        const ctx = this.ctx;
+        const t = ctx.currentTime;
+
+        // Click
+        const osc = ctx.createOscillator();
+        const g = ctx.createGain();
+        osc.type = 'square';
+        osc.frequency.setValueAtTime(3000, t);
+        osc.frequency.exponentialRampToValueAtTime(800, t + 0.03);
+        g.gain.setValueAtTime(0.2, t);
+        g.gain.exponentialRampToValueAtTime(0.001, t + 0.06);
+        osc.connect(g);
+        g.connect(this.masterGain);
+        osc.start(t);
+        osc.stop(t + 0.06);
+
+        // Metallic slide
+        const n = this.noise(0.08, 0.3);
+        const src = ctx.createBufferSource();
+        src.buffer = n;
+        const ng = ctx.createGain();
+        ng.gain.setValueAtTime(0.15, t + 0.03);
+        ng.gain.exponentialRampToValueAtTime(0.001, t + 0.1);
+        const bp = ctx.createBiquadFilter();
+        bp.type = 'bandpass';
+        bp.frequency.value = 4000;
+        bp.Q.value = 2;
+        src.connect(bp);
+        bp.connect(ng);
+        ng.connect(this.masterGain);
+        src.start(t + 0.03);
+    }
+
+    playPumpAction() {
+        this.ensure();
+        const ctx = this.ctx;
+        const t = ctx.currentTime;
+
+        // Mechanical slide sound
+        const n = this.noise(0.15, 0.5);
+        const src = ctx.createBufferSource();
+        src.buffer = n;
+        const g = ctx.createGain();
+        g.gain.setValueAtTime(0.0, t);
+        g.gain.linearRampToValueAtTime(0.25, t + 0.02);
+        g.gain.linearRampToValueAtTime(0.15, t + 0.08);
+        g.gain.linearRampToValueAtTime(0.25, t + 0.1);
+        g.gain.exponentialRampToValueAtTime(0.001, t + 0.18);
+        const bp = ctx.createBiquadFilter();
+        bp.type = 'bandpass';
+        bp.frequency.value = 2500;
+        bp.Q.value = 1.5;
+        src.connect(bp);
+        bp.connect(g);
+        g.connect(this.masterGain);
+        src.start(t);
+
+        // Metallic clack
+        const osc = ctx.createOscillator();
+        const og = ctx.createGain();
+        osc.type = 'square';
+        osc.frequency.setValueAtTime(1200, t + 0.1);
+        osc.frequency.exponentialRampToValueAtTime(400, t + 0.14);
+        og.gain.setValueAtTime(0.15, t + 0.1);
+        og.gain.exponentialRampToValueAtTime(0.001, t + 0.18);
+        osc.connect(og);
+        og.connect(this.masterGain);
+        osc.start(t + 0.1);
+        osc.stop(t + 0.18);
+    }
+
+    playDoorKick() {
+        this.ensure();
+        const ctx = this.ctx;
+        const t = ctx.currentTime;
+
+        // Heavy impact
+        const osc = ctx.createOscillator();
+        const g = ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(100, t);
+        osc.frequency.exponentialRampToValueAtTime(30, t + 0.2);
+        g.gain.setValueAtTime(0.7, t);
+        g.gain.exponentialRampToValueAtTime(0.001, t + 0.3);
+        osc.connect(g);
+        g.connect(this.masterGain);
+        osc.start(t);
+        osc.stop(t + 0.3);
+
+        // Wood crack
+        const n = this.noise(0.15, 0.8);
+        const src = ctx.createBufferSource();
+        src.buffer = n;
+        const ng = ctx.createGain();
+        ng.gain.setValueAtTime(0.5, t);
+        ng.gain.exponentialRampToValueAtTime(0.001, t + 0.2);
+        const bp = ctx.createBiquadFilter();
+        bp.type = 'bandpass';
+        bp.frequency.value = 1500;
+        bp.Q.value = 0.8;
+        src.connect(bp);
+        bp.connect(ng);
+        ng.connect(this.masterGain);
+        src.start(t);
+
+        // Door slam
+        const osc2 = ctx.createOscillator();
+        const g2 = ctx.createGain();
+        osc2.type = 'triangle';
+        osc2.frequency.setValueAtTime(200, t + 0.05);
+        osc2.frequency.exponentialRampToValueAtTime(50, t + 0.2);
+        g2.gain.setValueAtTime(0.4, t + 0.05);
+        g2.gain.exponentialRampToValueAtTime(0.001, t + 0.25);
+        osc2.connect(g2);
+        g2.connect(this.masterGain);
+        osc2.start(t + 0.05);
+        osc2.stop(t + 0.25);
+    }
+
+    playFootstep() {
+        this.ensure();
+        const ctx = this.ctx;
+        const t = ctx.currentTime;
+        const n = this.noise(0.08, 0.3);
+        const src = ctx.createBufferSource();
+        src.buffer = n;
+        const g = ctx.createGain();
+        g.gain.setValueAtTime(0.08, t);
+        g.gain.exponentialRampToValueAtTime(0.001, t + 0.08);
+        const lp = ctx.createBiquadFilter();
+        lp.type = 'lowpass';
+        lp.frequency.value = 800 + Math.random() * 400;
+        src.connect(lp);
+        lp.connect(g);
+        g.connect(this.masterGain);
+        src.start(t);
+    }
+
+    playEnemyPain() {
+        this.ensure();
+        const ctx = this.ctx;
+        const t = ctx.currentTime;
+
+        // Scream - layered voice-like synthesis
+        const baseFreq = 280 + Math.random() * 120;
+
+        // Vocal cord fundamental
+        const osc1 = ctx.createOscillator();
+        const g1 = ctx.createGain();
+        osc1.type = 'sawtooth';
+        osc1.frequency.setValueAtTime(baseFreq, t);
+        osc1.frequency.linearRampToValueAtTime(baseFreq * 1.5, t + 0.08);
+        osc1.frequency.linearRampToValueAtTime(baseFreq * 0.7, t + 0.5);
+        osc1.frequency.linearRampToValueAtTime(baseFreq * 0.4, t + 0.8);
+        g1.gain.setValueAtTime(0.0, t);
+        g1.gain.linearRampToValueAtTime(0.3, t + 0.03);
+        g1.gain.setValueAtTime(0.3, t + 0.15);
+        g1.gain.linearRampToValueAtTime(0.2, t + 0.5);
+        g1.gain.exponentialRampToValueAtTime(0.001, t + 0.85);
+        osc1.connect(g1);
+
+        // Formant 1 (voice resonance)
+        const bp1 = ctx.createBiquadFilter();
+        bp1.type = 'bandpass';
+        bp1.frequency.value = 700;
+        bp1.Q.value = 5;
+        g1.connect(bp1);
+        const f1g = ctx.createGain();
+        f1g.gain.value = 0.6;
+        bp1.connect(f1g);
+        f1g.connect(this.masterGain);
+
+        // Formant 2
+        const bp2 = ctx.createBiquadFilter();
+        bp2.type = 'bandpass';
+        bp2.frequency.value = 1200;
+        bp2.Q.value = 4;
+        g1.connect(bp2);
+        const f2g = ctx.createGain();
+        f2g.gain.value = 0.3;
+        bp2.connect(f2g);
+        f2g.connect(this.masterGain);
+
+        // Breathy noise layer
+        const nBuf = this.noise(0.8, 0.4);
+        const nSrc = ctx.createBufferSource();
+        nSrc.buffer = nBuf;
+        const ng = ctx.createGain();
+        ng.gain.setValueAtTime(0.0, t);
+        ng.gain.linearRampToValueAtTime(0.12, t + 0.05);
+        ng.gain.exponentialRampToValueAtTime(0.001, t + 0.7);
+        const nbp = ctx.createBiquadFilter();
+        nbp.type = 'bandpass';
+        nbp.frequency.value = 1500;
+        nbp.Q.value = 1;
+        nSrc.connect(nbp);
+        nbp.connect(ng);
+        ng.connect(this.masterGain);
+
+        osc1.start(t);
+        osc1.stop(t + 0.85);
+        nSrc.start(t);
+    }
+
+    playEnemyDeath() {
+        this.ensure();
+        const ctx = this.ctx;
+        const t = ctx.currentTime;
+
+        const baseFreq = 220 + Math.random() * 80;
+
+        // Long death scream - fundamental voice
+        const osc1 = ctx.createOscillator();
+        const g1 = ctx.createGain();
+        osc1.type = 'sawtooth';
+        osc1.frequency.setValueAtTime(baseFreq * 1.3, t);
+        osc1.frequency.linearRampToValueAtTime(baseFreq * 1.6, t + 0.15);
+        osc1.frequency.linearRampToValueAtTime(baseFreq, t + 0.4);
+        osc1.frequency.linearRampToValueAtTime(baseFreq * 0.5, t + 0.9);
+        osc1.frequency.linearRampToValueAtTime(baseFreq * 0.2, t + 1.4);
+        g1.gain.setValueAtTime(0.0, t);
+        g1.gain.linearRampToValueAtTime(0.35, t + 0.04);
+        g1.gain.setValueAtTime(0.35, t + 0.3);
+        g1.gain.linearRampToValueAtTime(0.25, t + 0.7);
+        g1.gain.linearRampToValueAtTime(0.1, t + 1.1);
+        g1.gain.exponentialRampToValueAtTime(0.001, t + 1.5);
+        osc1.connect(g1);
+
+        // Second harmonic
+        const osc2 = ctx.createOscillator();
+        osc2.type = 'sawtooth';
+        osc2.frequency.setValueAtTime(baseFreq * 2.6, t);
+        osc2.frequency.linearRampToValueAtTime(baseFreq * 1.0, t + 0.9);
+        osc2.frequency.linearRampToValueAtTime(baseFreq * 0.4, t + 1.4);
+        const g2 = ctx.createGain();
+        g2.gain.setValueAtTime(0.0, t);
+        g2.gain.linearRampToValueAtTime(0.12, t + 0.04);
+        g2.gain.exponentialRampToValueAtTime(0.001, t + 1.3);
+        osc2.connect(g2);
+
+        // Formant filters for voice quality
+        for (const [src, freq, q, vol] of [
+            [g1, 600, 5, 0.5], [g1, 1100, 4, 0.35], [g1, 2800, 3, 0.15],
+            [g2, 1100, 4, 0.15]
+        ]) {
+            const bp = ctx.createBiquadFilter();
+            bp.type = 'bandpass';
+            bp.frequency.value = freq;
+            bp.Q.value = q;
+            src.connect(bp);
+            const fg = ctx.createGain();
+            fg.gain.value = vol;
+            bp.connect(fg);
+            fg.connect(this.masterGain);
+        }
+
+        // Breathy/raspy noise
+        const nBuf = this.noise(1.5, 0.5);
+        const nSrc = ctx.createBufferSource();
+        nSrc.buffer = nBuf;
+        const ng = ctx.createGain();
+        ng.gain.setValueAtTime(0.0, t);
+        ng.gain.linearRampToValueAtTime(0.15, t + 0.06);
+        ng.gain.linearRampToValueAtTime(0.08, t + 0.5);
+        ng.gain.exponentialRampToValueAtTime(0.001, t + 1.4);
+        const nbp = ctx.createBiquadFilter();
+        nbp.type = 'bandpass';
+        nbp.frequency.value = 2000;
+        nbp.Q.value = 1;
+        nSrc.connect(nbp);
+        nbp.connect(ng);
+        ng.connect(this.masterGain);
+
+        // Body thud (delayed for when they hit the ground)
+        const thud = ctx.createOscillator();
+        const tg = ctx.createGain();
+        thud.type = 'sine';
+        thud.frequency.setValueAtTime(80, t + 0.5);
+        thud.frequency.exponentialRampToValueAtTime(25, t + 0.9);
+        tg.gain.setValueAtTime(0.0, t + 0.5);
+        tg.gain.linearRampToValueAtTime(0.4, t + 0.52);
+        tg.gain.exponentialRampToValueAtTime(0.001, t + 0.9);
+        thud.connect(tg);
+        tg.connect(this.masterGain);
+
+        // Gear rattle
+        const rattle = this.noise(0.3, 0.3);
+        const rSrc = ctx.createBufferSource();
+        rSrc.buffer = rattle;
+        const rg = ctx.createGain();
+        rg.gain.setValueAtTime(0.0, t + 0.5);
+        rg.gain.linearRampToValueAtTime(0.1, t + 0.52);
+        rg.gain.exponentialRampToValueAtTime(0.001, t + 0.8);
+        const rhp = ctx.createBiquadFilter();
+        rhp.type = 'highpass';
+        rhp.frequency.value = 3000;
+        rSrc.connect(rhp);
+        rhp.connect(rg);
+        rg.connect(this.masterGain);
+
+        osc1.start(t); osc1.stop(t + 1.5);
+        osc2.start(t); osc2.stop(t + 1.4);
+        nSrc.start(t);
+        thud.start(t + 0.5); thud.stop(t + 0.9);
+        rSrc.start(t + 0.5);
+    }
+
+    playEnemyShot() {
+        this.ensure();
+        const ctx = this.ctx;
+        const t = ctx.currentTime;
+
+        const osc = ctx.createOscillator();
+        const g = ctx.createGain();
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(200, t);
+        osc.frequency.exponentialRampToValueAtTime(60, t + 0.15);
+        g.gain.setValueAtTime(0.3, t);
+        g.gain.exponentialRampToValueAtTime(0.001, t + 0.15);
+        osc.connect(g);
+        g.connect(this.masterGain);
+        osc.start(t);
+        osc.stop(t + 0.15);
+
+        const n = this.noise(0.06, 0.6);
+        const src = ctx.createBufferSource();
+        src.buffer = n;
+        const ng = ctx.createGain();
+        ng.gain.setValueAtTime(0.25, t);
+        ng.gain.exponentialRampToValueAtTime(0.001, t + 0.06);
+        src.connect(ng);
+        ng.connect(this.masterGain);
+        src.start(t);
+    }
+
+    playPlayerHit() {
+        this.ensure();
+        const ctx = this.ctx;
+        const t = ctx.currentTime;
+
+        // Low thud
+        const osc = ctx.createOscillator();
+        const g = ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(60, t);
+        osc.frequency.exponentialRampToValueAtTime(20, t + 0.3);
+        g.gain.setValueAtTime(0.5, t);
+        g.gain.exponentialRampToValueAtTime(0.001, t + 0.4);
+        osc.connect(g);
+        g.connect(this.masterGain);
+        osc.start(t);
+        osc.stop(t + 0.4);
+
+        // High ring
+        const osc2 = ctx.createOscillator();
+        const g2 = ctx.createGain();
+        osc2.type = 'sine';
+        osc2.frequency.value = 4000;
+        g2.gain.setValueAtTime(0.1, t);
+        g2.gain.exponentialRampToValueAtTime(0.001, t + 0.8);
+        osc2.connect(g2);
+        g2.connect(this.masterGain);
+        osc2.start(t);
+        osc2.stop(t + 0.8);
+    }
+
+    startHeartbeat() {
+        if (this.heartbeatInterval) return;
+        this.heartbeatInterval = setInterval(() => {
+            this.ensure();
+            const ctx = this.ctx;
+            const t = ctx.currentTime;
+            // Lub
+            const o1 = ctx.createOscillator();
+            const g1 = ctx.createGain();
+            o1.type = 'sine';
+            o1.frequency.value = 50;
+            g1.gain.setValueAtTime(0.3, t);
+            g1.gain.exponentialRampToValueAtTime(0.001, t + 0.12);
+            o1.connect(g1);
+            g1.connect(this.masterGain);
+            o1.start(t);
+            o1.stop(t + 0.12);
+            // Dub
+            const o2 = ctx.createOscillator();
+            const g2 = ctx.createGain();
+            o2.type = 'sine';
+            o2.frequency.value = 40;
+            g2.gain.setValueAtTime(0.25, t + 0.15);
+            g2.gain.exponentialRampToValueAtTime(0.001, t + 0.27);
+            o2.connect(g2);
+            g2.connect(this.masterGain);
+            o2.start(t + 0.15);
+            o2.stop(t + 0.27);
+        }, 800);
+    }
+
+    stopHeartbeat() {
+        if (this.heartbeatInterval) {
+            clearInterval(this.heartbeatInterval);
+            this.heartbeatInterval = null;
+        }
+    }
+
+    playAmbient() {
+        this.ensure();
+        const ctx = this.ctx;
+        const buf = this.noise(4, 0.1);
+        const src = ctx.createBufferSource();
+        src.buffer = buf;
+        src.loop = true;
+        const g = ctx.createGain();
+        g.gain.value = 0.02;
+        const lp = ctx.createBiquadFilter();
+        lp.type = 'lowpass';
+        lp.frequency.value = 300;
+        src.connect(lp);
+        lp.connect(g);
+        g.connect(this.masterGain);
+        src.start();
+        this.ambientSrc = src;
+    }
+
+    playEnemyAlert() {
+        this.ensure();
+        const ctx = this.ctx;
+        const t = ctx.currentTime;
+        const osc = ctx.createOscillator();
+        const g = ctx.createGain();
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(300, t);
+        osc.frequency.linearRampToValueAtTime(500, t + 0.1);
+        osc.frequency.linearRampToValueAtTime(300, t + 0.2);
+        g.gain.setValueAtTime(0.08, t);
+        g.gain.exponentialRampToValueAtTime(0.001, t + 0.25);
+        osc.connect(g);
+        g.connect(this.masterGain);
+        osc.start(t);
+        osc.stop(t + 0.25);
+    }
+}
+
+// ============================================================
+// InputManager
+// ============================================================
+class InputManager {
+    constructor(canvas) {
+        this.canvas = canvas;
+        this.keys = {};
+        this.mouseDown = { left: false, right: false };
+        this.leftJustPressed = false;
+        this.mouseDX = 0;
+        this.mouseDY = 0;
+        this.locked = false;
+        this.justPressed = {};
+
+        document.addEventListener('keydown', e => {
+            if (!this.keys[e.code]) this.justPressed[e.code] = true;
+            this.keys[e.code] = true;
+        });
+        document.addEventListener('keyup', e => {
+            this.keys[e.code] = false;
+        });
+        document.addEventListener('mousedown', e => {
+            if (e.button === 0) { this.mouseDown.left = true; this.leftJustPressed = true; }
+            if (e.button === 2) this.mouseDown.right = true;
+        });
+        document.addEventListener('mouseup', e => {
+            if (e.button === 0) this.mouseDown.left = false;
+            if (e.button === 2) this.mouseDown.right = false;
+        });
+        document.addEventListener('mousemove', e => {
+            if (this.locked) {
+                this.mouseDX += e.movementX;
+                this.mouseDY += e.movementY;
+            }
+        });
+        document.addEventListener('pointerlockchange', () => {
+            this.locked = document.pointerLockElement === this.canvas;
+        });
+        canvas.addEventListener('contextmenu', e => e.preventDefault());
+    }
+
+    requestLock() {
+        this.canvas.requestPointerLock();
+    }
+
+    consumeMouse() {
+        const dx = this.mouseDX;
+        const dy = this.mouseDY;
+        this.mouseDX = 0;
+        this.mouseDY = 0;
+        return { dx, dy };
+    }
+
+    wasPressed(code) {
+        const v = this.justPressed[code] || false;
+        this.justPressed[code] = false;
+        return v;
+    }
+
+    clearFrame() {
+        this.justPressed = {};
+        this.leftJustPressed = false;
+    }
+}
+
+// ============================================================
+// Procedural Textures
+// ============================================================
+function makeTexture(width, height, drawFn) {
+    const c = document.createElement('canvas');
+    c.width = width;
+    c.height = height;
+    const ctx = c.getContext('2d');
+    drawFn(ctx, width, height);
+    const tex = new THREE.CanvasTexture(c);
+    tex.wrapS = THREE.RepeatWrapping;
+    tex.wrapT = THREE.RepeatWrapping;
+    return tex;
+}
+
+function concreteTexture() {
+    return makeTexture(256, 256, (ctx, w, h) => {
+        ctx.fillStyle = '#3a3632';
+        ctx.fillRect(0, 0, w, h);
+        for (let i = 0; i < 3000; i++) {
+            const x = Math.random() * w;
+            const y = Math.random() * h;
+            const b = 40 + Math.random() * 30;
+            ctx.fillStyle = `rgb(${b},${b - 5},${b - 8})`;
+            ctx.fillRect(x, y, 1 + Math.random() * 2, 1 + Math.random() * 2);
+        }
+        // Stains
+        for (let i = 0; i < 5; i++) {
+            ctx.beginPath();
+            ctx.arc(Math.random() * w, Math.random() * h, 10 + Math.random() * 30, 0, Math.PI * 2);
+            ctx.fillStyle = `rgba(30,25,20,${0.1 + Math.random() * 0.15})`;
+            ctx.fill();
+        }
+    });
+}
+
+function concreteFloorTexture() {
+    return makeTexture(256, 256, (ctx, w, h) => {
+        ctx.fillStyle = '#2e2a26';
+        ctx.fillRect(0, 0, w, h);
+        for (let i = 0; i < 4000; i++) {
+            const x = Math.random() * w;
+            const y = Math.random() * h;
+            const b = 30 + Math.random() * 25;
+            ctx.fillStyle = `rgb(${b},${b - 3},${b - 6})`;
+            ctx.fillRect(x, y, 1 + Math.random() * 3, 1 + Math.random() * 3);
+        }
+        // Cracks
+        ctx.strokeStyle = 'rgba(20,16,12,0.3)';
+        ctx.lineWidth = 1;
+        for (let i = 0; i < 3; i++) {
+            ctx.beginPath();
+            let x = Math.random() * w, y = Math.random() * h;
+            ctx.moveTo(x, y);
+            for (let j = 0; j < 5; j++) {
+                x += (Math.random() - 0.5) * 60;
+                y += (Math.random() - 0.5) * 60;
+                ctx.lineTo(x, y);
+            }
+            ctx.stroke();
+        }
+    });
+}
+
+function ceilingTexture() {
+    return makeTexture(256, 256, (ctx, w, h) => {
+        ctx.fillStyle = '#2a2622';
+        ctx.fillRect(0, 0, w, h);
+        for (let i = 0; i < 2000; i++) {
+            const x = Math.random() * w;
+            const y = Math.random() * h;
+            const b = 35 + Math.random() * 20;
+            ctx.fillStyle = `rgb(${b},${b - 2},${b - 4})`;
+            ctx.fillRect(x, y, 1 + Math.random() * 2, 1);
+        }
+    });
+}
+
+function woodTexture() {
+    return makeTexture(128, 256, (ctx, w, h) => {
+        ctx.fillStyle = '#4a3520';
+        ctx.fillRect(0, 0, w, h);
+        for (let y = 0; y < h; y += 2) {
+            const b = 60 + Math.sin(y * 0.1) * 15 + Math.random() * 10;
+            ctx.fillStyle = `rgb(${b},${b * 0.65},${b * 0.35})`;
+            ctx.fillRect(0, y, w, 2);
+        }
+        // Grain lines
+        ctx.strokeStyle = 'rgba(30,18,8,0.2)';
+        for (let i = 0; i < 10; i++) {
+            ctx.beginPath();
+            const x = Math.random() * w;
+            ctx.moveTo(x, 0);
+            ctx.lineTo(x + (Math.random() - 0.5) * 20, h);
+            ctx.stroke();
+        }
+    });
+}
+
+function plasterTexture() {
+    return makeTexture(256, 256, (ctx, w, h) => {
+        ctx.fillStyle = '#4a4440';
+        ctx.fillRect(0, 0, w, h);
+        for (let i = 0; i < 5000; i++) {
+            const x = Math.random() * w;
+            const y = Math.random() * h;
+            const b = 55 + Math.random() * 25;
+            ctx.fillStyle = `rgb(${b},${b - 5},${b - 10})`;
+            ctx.fillRect(x, y, 1, 1);
+        }
+    });
+}
+
+function doorTexture() {
+    return makeTexture(128, 256, (ctx, w, h) => {
+        ctx.fillStyle = '#3d2b1a';
+        ctx.fillRect(0, 0, w, h);
+        // Panels
+        ctx.strokeStyle = '#2a1c0e';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(10, 10, w - 20, h / 2 - 15);
+        ctx.strokeRect(10, h / 2 + 5, w - 20, h / 2 - 15);
+        // Wood grain
+        for (let y = 0; y < h; y += 3) {
+            const b = 50 + Math.sin(y * 0.08) * 12 + Math.random() * 8;
+            ctx.fillStyle = `rgba(${b},${b * 0.6},${b * 0.3},0.3)`;
+            ctx.fillRect(0, y, w, 2);
+        }
+    });
+}
+
+function tileTexture() {
+    return makeTexture(256, 256, (ctx, w, h) => {
+        ctx.fillStyle = '#38332e';
+        ctx.fillRect(0, 0, w, h);
+        const tileSize = 32;
+        for (let tx = 0; tx < w; tx += tileSize) {
+            for (let ty = 0; ty < h; ty += tileSize) {
+                const b = 45 + Math.random() * 20;
+                ctx.fillStyle = `rgb(${b},${b - 3},${b - 5})`;
+                ctx.fillRect(tx + 1, ty + 1, tileSize - 2, tileSize - 2);
+            }
+        }
+    });
+}
+
+// ============================================================
+// Level
+// ============================================================
+class Level {
+    constructor(scene) {
+        this.scene = scene;
+        this.colliders = [];
+        this.doorPositions = [];
+        this.lights = [];
+        this.build();
+    }
+
+    build() {
+        const concreteTex = concreteTexture();
+        const floorTex = concreteFloorTexture();
+        const ceilTex = ceilingTexture();
+        const plasterTex_ = plasterTexture();
+        const tileTex = tileTexture();
+
+        floorTex.repeat.set(6, 60);
+        ceilTex.repeat.set(6, 60);
+
+        const corridorW = 3;
+        const corridorL = 30;
+        const corridorH = 3;
+        const aptW = 5;
+        const aptL = 5;
+
+        // Corridor floor
+        const floorGeo = new THREE.PlaneGeometry(corridorW, corridorL);
+        const floorMat = new THREE.MeshStandardMaterial({ map: floorTex, roughness: 0.9 });
+        const floor = new THREE.Mesh(floorGeo, floorMat);
+        floor.rotation.x = -Math.PI / 2;
+        floor.position.set(0, 0, corridorL / 2);
+        this.scene.add(floor);
+
+        // Corridor ceiling
+        const ceilGeo = new THREE.PlaneGeometry(corridorW, corridorL);
+        const ceilMat = new THREE.MeshStandardMaterial({ map: ceilTex, roughness: 0.95 });
+        const ceil = new THREE.Mesh(ceilGeo, ceilMat);
+        ceil.rotation.x = Math.PI / 2;
+        ceil.position.set(0, corridorH, corridorL / 2);
+        this.scene.add(ceil);
+
+        // Build corridor walls with door openings
+        const wallThickness = 0.15;
+        const doorW = 1.0;
+        const doorH = 2.4;
+        const doorSpacing = 3.0; // doors every 3m (starting at z=3)
+
+        const wallTex = concreteTexture();
+        wallTex.repeat.set(2, 1);
+        const wallMat = new THREE.MeshStandardMaterial({ map: wallTex, roughness: 0.85 });
+
+        // Door positions: 5 on left, 5 on right
+        for (let i = 0; i < 10; i++) {
+            const side = i % 2 === 0 ? -1 : 1; // even=left, odd=right
+            const idx = Math.floor(i / 2);
+            const doorZ = 3 + idx * 6; // z=3,9,15,21,27 for left; z=3,9,15,21,27 for right
+            // Actually let's space them: door 0,1 at z=3; door 2,3 at z=6; etc
+            // Revised: 5 per side, spaced every 6m
+            const z = 3 + idx * 6;
+            this.doorPositions.push({
+                x: side * (corridorW / 2),
+                z: z,
+                side: side,
+                index: i
+            });
+        }
+
+        // Build corridor walls (left and right)
+        for (let side of [-1, 1]) {
+            const wallX = side * corridorW / 2;
+
+            // Get doors on this side
+            const sideDoors = this.doorPositions.filter(d => d.side === side);
+            const doorZs = sideDoors.map(d => d.z);
+
+            // Build wall segments between doors
+            let prevZ = 0;
+            const allZ = [...doorZs, corridorL].sort((a, b) => a - b);
+
+            for (const dz of allZ) {
+                const segStart = prevZ;
+                const segBeforeDoor = dz - doorW / 2;
+                const segAfterDoor = dz + doorW / 2;
+
+                // Wall segment before door
+                if (segBeforeDoor > segStart + 0.01) {
+                    const segLen = segBeforeDoor - segStart;
+                    this.addWallSegment(wallX, segStart, segLen, corridorH, wallThickness, side, wallMat);
+                }
+
+                if (dz < corridorL) {
+                    // Wall above door
+                    if (doorH < corridorH) {
+                        const aboveH = corridorH - doorH;
+                        const aboveGeo = new THREE.BoxGeometry(wallThickness, aboveH, doorW);
+                        const above = new THREE.Mesh(aboveGeo, wallMat);
+                        above.position.set(wallX, doorH + aboveH / 2, dz);
+                        this.scene.add(above);
+                    }
+                    prevZ = segAfterDoor;
+                } else {
+                    prevZ = dz;
+                }
+            }
+
+            // Wall after last door
+            if (prevZ < corridorL) {
+                const segLen = corridorL - prevZ;
+                this.addWallSegment(wallX, prevZ, segLen, corridorH, wallThickness, side, wallMat);
+            }
+        }
+
+        // Corridor end walls
+        const endWallGeo = new THREE.BoxGeometry(corridorW + wallThickness * 2, corridorH, wallThickness);
+        const endWall1 = new THREE.Mesh(endWallGeo, wallMat);
+        endWall1.position.set(0, corridorH / 2, 0);
+        this.scene.add(endWall1);
+        this.colliders.push(new AABB(-corridorW / 2 - wallThickness, -wallThickness, corridorW / 2 + wallThickness, 0));
+
+        const endWall2 = new THREE.Mesh(endWallGeo, wallMat);
+        endWall2.position.set(0, corridorH / 2, corridorL);
+        this.scene.add(endWall2);
+        this.colliders.push(new AABB(-corridorW / 2 - wallThickness, corridorL, corridorW / 2 + wallThickness, corridorL + wallThickness));
+
+        // Build apartments
+        const aptFloorTex = tileTexture();
+        aptFloorTex.repeat.set(2, 2);
+        const aptFloorMat = new THREE.MeshStandardMaterial({ map: aptFloorTex, roughness: 0.85 });
+        const aptWallTex = plasterTexture();
+        aptWallTex.repeat.set(2, 1);
+        const aptWallMat = new THREE.MeshStandardMaterial({ map: aptWallTex, roughness: 0.8 });
+        const aptCeilMat = new THREE.MeshStandardMaterial({ color: 0x2a2622, roughness: 0.9 });
+
+        for (const dp of this.doorPositions) {
+            const aptCenterX = dp.x + dp.side * (aptW / 2 + wallThickness / 2);
+            const aptCenterZ = dp.z;
+
+            // Apartment floor
+            const af = new THREE.Mesh(new THREE.PlaneGeometry(aptW, aptL), aptFloorMat);
+            af.rotation.x = -Math.PI / 2;
+            af.position.set(aptCenterX, 0.001, aptCenterZ);
+            this.scene.add(af);
+
+            // Apartment ceiling
+            const ac = new THREE.Mesh(new THREE.PlaneGeometry(aptW, aptL), aptCeilMat);
+            ac.rotation.x = Math.PI / 2;
+            ac.position.set(aptCenterX, corridorH, aptCenterZ);
+            this.scene.add(ac);
+
+            // Apartment walls (3 sides - the 4th is the corridor wall with door)
+            const farX = aptCenterX + dp.side * aptW / 2;
+            const minZ = aptCenterZ - aptL / 2;
+            const maxZ = aptCenterZ + aptL / 2;
+            const nearX = dp.x;
+
+            // Far wall (opposite corridor)
+            this.addBoxWall(farX, minZ, maxZ, corridorH, wallThickness, 'x', aptWallMat);
+            // AABB collider
+            if (dp.side < 0) {
+                this.colliders.push(new AABB(farX - wallThickness / 2, minZ, farX + wallThickness / 2, maxZ));
+            } else {
+                this.colliders.push(new AABB(farX - wallThickness / 2, minZ, farX + wallThickness / 2, maxZ));
+            }
+
+            // Side walls (z-axis)
+            this.addBoxWall2(nearX, farX, minZ, corridorH, wallThickness, aptWallMat);
+            this.addBoxWall2(nearX, farX, maxZ, corridorH, wallThickness, aptWallMat);
+
+            const sideMinX = Math.min(nearX, farX);
+            const sideMaxX = Math.max(nearX, farX);
+            this.colliders.push(new AABB(sideMinX, minZ - wallThickness / 2, sideMaxX, minZ + wallThickness / 2));
+            this.colliders.push(new AABB(sideMinX, maxZ - wallThickness / 2, sideMaxX, maxZ + wallThickness / 2));
+
+            // Apartment light
+            const aptLight = new THREE.PointLight(0xffcc88, 1.5, 10);
+            aptLight.position.set(aptCenterX, 2.5, aptCenterZ);
+            this.scene.add(aptLight);
+            this.lights.push(aptLight);
+
+            // Simple furniture - a box (table/bed)
+            const furnitureGeo = new THREE.BoxGeometry(1.2, 0.5, 0.8);
+            const furnitureMat = new THREE.MeshStandardMaterial({ color: 0x3a2a1a, roughness: 0.9 });
+            const furniture = new THREE.Mesh(furnitureGeo, furnitureMat);
+            furniture.position.set(
+                aptCenterX + dp.side * 1.2,
+                0.25,
+                aptCenterZ + (Math.random() - 0.5) * 2
+            );
+            this.scene.add(furniture);
+        }
+
+        // Corridor lights
+        for (let z = 2; z < corridorL; z += 4) {
+            const light = new THREE.PointLight(0xffaa55, 2.0, 12);
+            light.position.set(0, 2.7, z);
+            this.scene.add(light);
+            this.lights.push(light);
+
+            // Light fixture mesh
+            const fixtureGeo = new THREE.BoxGeometry(0.3, 0.05, 0.3);
+            const fixtureMat = new THREE.MeshStandardMaterial({ color: 0xcccccc, emissive: 0xffaa55, emissiveIntensity: 1.0 });
+            const fixture = new THREE.Mesh(fixtureGeo, fixtureMat);
+            fixture.position.set(0, 2.95, z);
+            this.scene.add(fixture);
+        }
+
+        // Ambient light
+        const ambient = new THREE.AmbientLight(0x483828, 1.0);
+        this.scene.add(ambient);
+
+        // Hemisphere light (sky/ground fill)
+        const hemi = new THREE.HemisphereLight(0x887766, 0x332211, 0.6);
+        this.scene.add(hemi);
+
+        // Add fog (pushed back so you can see further)
+        this.scene.fog = new THREE.Fog(0x0a0806, 12, 35);
+    }
+
+    addWallSegment(wallX, startZ, length, height, thickness, side, mat) {
+        const geo = new THREE.BoxGeometry(thickness, height, length);
+        const wall = new THREE.Mesh(geo, mat);
+        wall.position.set(wallX, height / 2, startZ + length / 2);
+        this.scene.add(wall);
+
+        // Collider
+        const halfT = thickness / 2;
+        this.colliders.push(new AABB(
+            wallX - halfT, startZ,
+            wallX + halfT, startZ + length
+        ));
+    }
+
+    addBoxWall(x, minZ, maxZ, h, thickness, axis, mat) {
+        const len = maxZ - minZ;
+        const geo = new THREE.BoxGeometry(thickness, h, len);
+        const wall = new THREE.Mesh(geo, mat);
+        wall.position.set(x, h / 2, (minZ + maxZ) / 2);
+        this.scene.add(wall);
+    }
+
+    addBoxWall2(x1, x2, z, h, thickness, mat) {
+        const len = Math.abs(x2 - x1);
+        const geo = new THREE.BoxGeometry(len, h, thickness);
+        const wall = new THREE.Mesh(geo, mat);
+        wall.position.set((x1 + x2) / 2, h / 2, z);
+        this.scene.add(wall);
+    }
+}
+
+// ============================================================
+// Door
+// ============================================================
+class Door {
+    constructor(scene, position, side, index) {
+        this.scene = scene;
+        this.position = position;
+        this.side = side;
+        this.index = index;
+        this.isOpen = false;
+        this.kickProgress = 0;
+        this.kicking = false;
+
+        const doorW = 1.0;
+        const doorH = 2.4;
+        const doorThickness = 0.08;
+
+        // Door mesh
+        const dTex = doorTexture();
+        const geo = new THREE.BoxGeometry(doorThickness, doorH, doorW);
+        this.mat = new THREE.MeshStandardMaterial({ map: dTex, roughness: 0.7 });
+        this.mesh = new THREE.Mesh(geo, this.mat);
+        this.mesh.position.set(position.x, doorH / 2, position.z);
+        scene.add(this.mesh);
+
+        // Door frame
+        const frameMat = new THREE.MeshStandardMaterial({ color: 0x2a1c10, roughness: 0.8 });
+        const frameW = 0.06;
+        // Left frame
+        const lf = new THREE.Mesh(new THREE.BoxGeometry(frameW, doorH, frameW), frameMat);
+        lf.position.set(position.x, doorH / 2, position.z - doorW / 2 - frameW / 2);
+        scene.add(lf);
+        // Right frame
+        const rf = new THREE.Mesh(new THREE.BoxGeometry(frameW, doorH, frameW), frameMat);
+        rf.position.set(position.x, doorH / 2, position.z + doorW / 2 + frameW / 2);
+        scene.add(rf);
+        // Top frame
+        const tf = new THREE.Mesh(new THREE.BoxGeometry(frameW, frameW, doorW + frameW * 2), frameMat);
+        tf.position.set(position.x, doorH + frameW / 2, position.z);
+        scene.add(tf);
+
+        // Door collider (when closed)
+        const halfT = doorThickness * 3;
+        this.collider = new AABB(
+            position.x - halfT, position.z - doorW / 2,
+            position.x + halfT, position.z + doorW / 2
+        );
+    }
+
+    kick(sound) {
+        if (this.isOpen || this.kicking) return;
+        this.kicking = true;
+        if (sound) sound.playDoorKick();
+    }
+
+    update(dt) {
+        if (this.kicking && !this.isOpen) {
+            this.kickProgress += dt * 4;
+            if (this.kickProgress >= 1) {
+                this.kickProgress = 1;
+                this.isOpen = true;
+                this.kicking = false;
+            }
+            // Animate: door swings into the apartment
+            const angle = this.kickProgress * Math.PI * 0.45;
+            // Swing around the hinge edge (z - doorW/2)
+            const doorW = 1.0;
+            const hingeZ = this.position.z - doorW / 2;
+            const pivotAngle = this.side * angle;
+
+            this.mesh.position.x = this.position.x + this.side * Math.sin(angle) * doorW / 2;
+            this.mesh.position.z = hingeZ + Math.cos(angle) * doorW / 2;
+            this.mesh.rotation.y = pivotAngle;
+
+            // Also make door fly away at end
+            if (this.kickProgress > 0.8) {
+                const fly = (this.kickProgress - 0.8) / 0.2;
+                this.mesh.position.x += this.side * fly * 2;
+                this.mesh.position.y -= fly * 0.5;
+                this.mesh.rotation.z = fly * 0.3 * this.side;
+            }
+        }
+
+        // Hide door once fully kicked
+        if (this.isOpen && this.mesh.visible) {
+            this.mesh.visible = false;
+        }
+    }
+
+    getCollider() {
+        return this.isOpen ? null : this.collider;
+    }
+
+    isNear(px, pz, dist) {
+        const dx = px - this.position.x;
+        const dz = pz - this.position.z;
+        return Math.sqrt(dx * dx + dz * dz) < dist;
+    }
+}
+
+// ============================================================
+// Weapon (Shotgun)
+// ============================================================
+class Weapon {
+    constructor(camera) {
+        this.camera = camera;
+        this.group = new THREE.Group();
+        camera.add(this.group);
+
+        this.ammo = 6;
+        this.maxAmmo = 6;
+        this.isReloading = false;
+        this.reloadTimer = 0;
+        this.shellsToLoad = 0;
+        this.shootCooldown = 0;
+        this.recoilOffset = 0;
+        this.adsLerp = 0; // 0=hip, 1=ADS
+        this.isADS = false;
+        this.pumpTimer = 0;
+        this.isPumping = false;
+
+        // Positions
+        this.hipPos = new THREE.Vector3(0.35, -0.3, -0.5);
+        this.adsPos = new THREE.Vector3(0.0, -0.22, -0.4);
+
+        this.buildMesh();
+        this.group.position.copy(this.hipPos);
+    }
+
+    buildMesh() {
+        const gunMat = new THREE.MeshStandardMaterial({ color: 0x1a1a1a, roughness: 0.4, metalness: 0.8 });
+        const woodMat = new THREE.MeshStandardMaterial({ color: 0x4a3020, roughness: 0.7 });
+
+        // Barrel
+        const barrel = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.02, 0.025, 0.7, 8),
+            gunMat
+        );
+        barrel.rotation.x = Math.PI / 2;
+        barrel.position.set(0, 0.02, -0.3);
+        this.group.add(barrel);
+
+        // Magazine tube
+        const magTube = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.015, 0.018, 0.5, 8),
+            gunMat
+        );
+        magTube.rotation.x = Math.PI / 2;
+        magTube.position.set(0, -0.02, -0.2);
+        this.group.add(magTube);
+
+        // Receiver
+        const receiver = new THREE.Mesh(
+            new THREE.BoxGeometry(0.06, 0.07, 0.2),
+            gunMat
+        );
+        receiver.position.set(0, 0, 0.05);
+        this.group.add(receiver);
+
+        // Pump grip
+        this.pumpGrip = new THREE.Mesh(
+            new THREE.BoxGeometry(0.05, 0.05, 0.1),
+            woodMat
+        );
+        this.pumpGrip.position.set(0, -0.02, -0.15);
+        this.group.add(this.pumpGrip);
+
+        // Stock
+        const stock = new THREE.Mesh(
+            new THREE.BoxGeometry(0.05, 0.08, 0.25),
+            woodMat
+        );
+        stock.position.set(0, -0.01, 0.25);
+        this.group.add(stock);
+
+        // Grip
+        const grip = new THREE.Mesh(
+            new THREE.BoxGeometry(0.04, 0.1, 0.04),
+            woodMat
+        );
+        grip.position.set(0, -0.06, 0.08);
+        grip.rotation.x = 0.3;
+        this.group.add(grip);
+
+        // Muzzle flash (hidden by default)
+        this.muzzleFlash = new THREE.Mesh(
+            new THREE.SphereGeometry(0.08, 8, 8),
+            new THREE.MeshBasicMaterial({ color: 0xffaa33, transparent: true, opacity: 0 })
+        );
+        this.muzzleFlash.position.set(0, 0.02, -0.65);
+        this.group.add(this.muzzleFlash);
+
+        // Muzzle flash point light
+        this.muzzleLight = new THREE.PointLight(0xffaa33, 0, 8);
+        this.muzzleLight.position.set(0, 0.02, -0.65);
+        this.group.add(this.muzzleLight);
+
+        // Tactical flashlight under barrel
+        this.flashlight = new THREE.SpotLight(0xfff5e0, 8, 30, Math.PI / 6, 0.3, 1.0);
+        this.flashlight.position.set(0, -0.01, -0.55);
+        this.flashlight.target.position.set(0, -0.01, -5);
+        this.group.add(this.flashlight);
+        this.group.add(this.flashlight.target);
+
+        // Small flashlight body mesh
+        const flashBody = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.012, 0.014, 0.08, 6),
+            new THREE.MeshStandardMaterial({ color: 0x222222, metalness: 0.9, roughness: 0.3 })
+        );
+        flashBody.rotation.x = Math.PI / 2;
+        flashBody.position.set(0, -0.03, -0.35);
+        this.group.add(flashBody);
+
+        // Lens glow
+        this.lensGlow = new THREE.Mesh(
+            new THREE.CircleGeometry(0.012, 8),
+            new THREE.MeshBasicMaterial({ color: 0xfff5e0, transparent: true, opacity: 0.6 })
+        );
+        this.lensGlow.position.set(0, -0.03, -0.39);
+        this.group.add(this.lensGlow);
+    }
+
+    shoot(sound) {
+        if (this.shootCooldown > 0 || this.ammo <= 0 || this.isReloading || this.isPumping) return false;
+        this.ammo--;
+        this.shootCooldown = 0.1;
+        this.recoilOffset = 1.0;
+        this.isPumping = true;
+        this.pumpTimer = 0;
+        this.pumpSoundPlayed = false;
+
+        // Muzzle flash
+        this.muzzleFlash.material.opacity = 1.0;
+        if (this.muzzleLight) this.muzzleLight.intensity = 5;
+
+        if (sound) sound.playGunshot();
+        return true;
+    }
+
+    startReload(sound) {
+        if (this.isReloading || this.ammo >= this.maxAmmo) return;
+        this.isReloading = true;
+        this.reloadTimer = 0;
+        this.shellsToLoad = this.maxAmmo - this.ammo;
+    }
+
+    update(dt, isRightDown, sound) {
+        // Shoot cooldown
+        this.shootCooldown = Math.max(0, this.shootCooldown - dt);
+
+        // Pump action after shooting
+        if (this.isPumping) {
+            this.pumpTimer += dt;
+            // Pump slide animation
+            const pumpPhase = this.pumpTimer / 0.4;
+            if (pumpPhase < 0.5) {
+                this.pumpGrip.position.z = -0.15 + pumpPhase * 0.2;
+            } else if (pumpPhase < 1.0) {
+                this.pumpGrip.position.z = -0.15 + (1.0 - pumpPhase) * 0.2;
+            }
+            if (this.pumpTimer > 0.35 && !this.pumpSoundPlayed) {
+                this.pumpSoundPlayed = true;
+                if (sound) sound.playPumpAction();
+            }
+            if (this.pumpTimer > 0.5) {
+                this.isPumping = false;
+                this.pumpGrip.position.z = -0.15;
+            }
+        }
+
+        // Reload
+        if (this.isReloading) {
+            this.reloadTimer += dt;
+            if (this.reloadTimer > 0.4) {
+                this.reloadTimer = 0;
+                this.ammo++;
+                this.shellsToLoad--;
+                if (sound) sound.playReloadShell();
+                if (this.shellsToLoad <= 0 || this.ammo >= this.maxAmmo) {
+                    this.isReloading = false;
+                }
+            }
+            // Shell loading visual - slight weapon dip
+            const loadPhase = this.reloadTimer / 0.4;
+            this.group.position.y += Math.sin(loadPhase * Math.PI) * 0.002;
+        }
+
+        // ADS
+        this.isADS = isRightDown && !this.isReloading;
+        const targetADS = this.isADS ? 1 : 0;
+        this.adsLerp += (targetADS - this.adsLerp) * dt * 10;
+
+        // Position lerp
+        const targetPos = new THREE.Vector3().lerpVectors(this.hipPos, this.adsPos, this.adsLerp);
+        this.group.position.lerp(targetPos, dt * 12);
+
+        // Recoil
+        this.recoilOffset *= Math.pow(0.001, dt);
+        this.group.position.z += this.recoilOffset * 0.1;
+        this.group.rotation.x = -this.recoilOffset * 0.15;
+
+        // Muzzle flash fade
+        if (this.muzzleFlash.material.opacity > 0) {
+            this.muzzleFlash.material.opacity -= dt * 15;
+            if (this.muzzleFlash.material.opacity < 0) this.muzzleFlash.material.opacity = 0;
+        }
+
+        // Muzzle flash light fade
+        if (this.muzzleLight) {
+            this.muzzleLight.intensity *= Math.pow(0.0001, dt);
+            if (this.muzzleLight.intensity < 0.01) this.muzzleLight.intensity = 0;
+        }
+    }
+
+    getSpreadAngle() {
+        return this.isADS ? 0.02 : 0.07;
+    }
+}
+
+// ============================================================
+// Enemy
+// ============================================================
+const ENEMY_STATE = {
+    IDLE: 'IDLE',
+    ALERT: 'ALERT',
+    ATTACKING: 'ATTACKING',
+    RUSHING: 'RUSHING',
+    WOUNDED: 'WOUNDED',
+    DEAD: 'DEAD'
+};
+
+class Enemy {
+    constructor(scene, x, z, doorSide, apartmentIndex) {
+        this.scene = scene;
+        this.hp = 2;
+        this.state = ENEMY_STATE.IDLE;
+        this.stateTimer = 0;
+        this.shootTimer = 0;
+        this.doorSide = doorSide;
+        this.apartmentIndex = apartmentIndex;
+
+        this.spawnX = x;
+        this.spawnZ = z;
+
+        this.group = new THREE.Group();
+        this.group.position.set(x, 0, z);
+        scene.add(this.group);
+
+        this.buildMesh();
+        this.deathFallProgress = 0;
+        this.woundFallProgress = 0;
+        this.rushSpeed = 3;
+        this.hasShot = false;
+        this.radius = 0.3;
+
+        // Ragdoll physics
+        this.ragdoll = null;
+        this.ragdollActive = false;
+        this.woundWritheTimer = 0;
+        this.settleTimer = 0;
+
+        // Store default positions to reset from
+        this.defaultPositions = {
+            head: { y: 1.68 },
+            torso: { y: 1.25 },
+            leftArm: { x: -0.28, y: 1.35 },
+            rightArm: { x: 0.28, y: 1.35 },
+            leftLeg: { x: -0.11, y: 0.7 },
+            rightLeg: { x: 0.11, y: 0.7 },
+            weapon: { x: 0.28, y: 1.15, z: -0.15 }
+        };
+    }
+
+    // Reset all body part transforms to standing pose
+    resetPose() {
+        this.body.rotation.set(0, 0, 0);
+        const d = this.defaultPositions;
+        this.head.position.set(0, d.head.y, 0);
+        this.head.rotation.set(0, 0, 0);
+        this.torso.position.set(0, d.torso.y, 0);
+        this.torso.rotation.set(0, 0, 0);
+        this.leftArm.position.set(d.leftArm.x, d.leftArm.y, 0);
+        this.leftArm.rotation.set(0, 0, 0);
+        this.rightArm.position.set(d.rightArm.x, d.rightArm.y, 0);
+        this.rightArm.rotation.set(0, 0, 0);
+        this.leftLeg.position.set(d.leftLeg.x, d.leftLeg.y, 0);
+        this.leftLeg.rotation.set(0, 0, 0);
+        this.rightLeg.position.set(d.rightLeg.x, d.rightLeg.y, 0);
+        this.rightLeg.rotation.set(0, 0, 0);
+        this.weapon.position.set(d.weapon.x, d.weapon.y, d.weapon.z);
+        this.weapon.rotation.set(0, 0, 0);
+    }
+
+    activateRagdoll(impulseDir, colliders) {
+        if (this.ragdollActive) return;
+        this.ragdollActive = true;
+
+        // Reset body pivot so all mesh parts are in neutral local positions
+        this.body.rotation.set(0, 0, 0);
+        this.body.position.set(0, 0, 0);
+
+        // Create ragdoll at enemy's world position + facing
+        this.ragdoll = new Ragdoll();
+        this.ragdoll.init(
+            this.group.position.x,
+            this.group.position.z,
+            this.group.rotation.y
+        );
+
+        // Activate with impulse from bullet
+        this.ragdoll.activate(impulseDir, 8);
+
+        // Detach body parts from body group into group directly so we can
+        // position them in world-local space driven by ragdoll particles
+        // (We'll position them relative to group which stays at origin)
+    }
+
+    syncMeshToRagdoll() {
+        if (!this.ragdoll || !this.ragdollActive) return;
+
+        const p = this.ragdoll.particles;
+
+        // Move group to hips position (base reference point)
+        this.group.position.x = p.hips.pos.x;
+        this.group.position.z = p.hips.pos.z;
+        this.group.position.y = 0;
+        this.group.rotation.set(0, 0, 0);
+        this.body.rotation.set(0, 0, 0);
+        this.body.position.set(0, 0, 0);
+
+        const gx = p.hips.pos.x;
+        const gz = p.hips.pos.z;
+
+        // Helper: position mesh group at midpoint between two particles
+        const placeBetween = (mesh, pA, pB) => {
+            const mx = (pA.pos.x + pB.pos.x) / 2 - gx;
+            const my = (pA.pos.y + pB.pos.y) / 2;
+            const mz = (pA.pos.z + pB.pos.z) / 2 - gz;
+            mesh.position.set(mx, my, mz);
+
+            // Orient along the axis between particles
+            const dir = new THREE.Vector3(
+                pB.pos.x - pA.pos.x,
+                pB.pos.y - pA.pos.y,
+                pB.pos.z - pA.pos.z
+            );
+            if (dir.lengthSq() > 0.0001) {
+                orientMeshAlongAxis(mesh, dir, new THREE.Vector3(0, 1, 0));
+            }
+        };
+
+        // Helper: place at particle pos
+        const placeAt = (mesh, part) => {
+            mesh.position.set(
+                part.pos.x - gx,
+                part.pos.y,
+                part.pos.z - gz
+            );
+        };
+
+        // Head: between head and neck particles
+        placeBetween(this.head, p.neck, p.head);
+
+        // Torso: between chest and hips
+        placeBetween(this.torso, p.hips, p.chest);
+
+        // Left arm: between lShoulder and lHand
+        placeBetween(this.leftArm, p.lShoulder, p.lHand);
+
+        // Right arm: between rShoulder and rHand
+        placeBetween(this.rightArm, p.rShoulder, p.rHand);
+
+        // Left leg upper: between hips and lKnee
+        // We need to split each leg into the group itself
+        const lLegMid = new THREE.Vector3(
+            (p.hips.pos.x + p.lFoot.pos.x) / 2 - gx,
+            (p.hips.pos.y + p.lFoot.pos.y) / 2,
+            (p.hips.pos.z + p.lFoot.pos.z) / 2 - gz
+        );
+        this.leftLeg.position.copy(lLegMid);
+        const lLegDir = new THREE.Vector3(
+            p.lFoot.pos.x - p.hips.pos.x,
+            p.lFoot.pos.y - p.hips.pos.y,
+            p.lFoot.pos.z - p.hips.pos.z
+        );
+        if (lLegDir.lengthSq() > 0.0001) {
+            // Legs default axis is -Y (pointing down)
+            orientMeshAlongAxis(this.leftLeg, lLegDir.negate(), new THREE.Vector3(0, 1, 0));
+        }
+
+        const rLegMid = new THREE.Vector3(
+            (p.hips.pos.x + p.rFoot.pos.x) / 2 - gx,
+            (p.hips.pos.y + p.rFoot.pos.y) / 2,
+            (p.hips.pos.z + p.rFoot.pos.z) / 2 - gz
+        );
+        this.rightLeg.position.copy(rLegMid);
+        const rLegDir = new THREE.Vector3(
+            p.rFoot.pos.x - p.hips.pos.x,
+            p.rFoot.pos.y - p.hips.pos.y,
+            p.rFoot.pos.z - p.hips.pos.z
+        );
+        if (rLegDir.lengthSq() > 0.0001) {
+            orientMeshAlongAxis(this.rightLeg, rLegDir.negate(), new THREE.Vector3(0, 1, 0));
+        }
+
+        // Weapon: drop near right hand
+        this.weapon.position.set(
+            p.rHand.pos.x - gx,
+            p.rHand.pos.y,
+            p.rHand.pos.z - gz
+        );
+        this.weapon.rotation.set(0.5, 0, 1.2);
+    }
+
+    buildMesh() {
+        // Body pivot — rotates around feet (y=0) for fall animations
+        // group handles XZ position + Y facing; body handles fall tilt
+        this.body = new THREE.Group();
+        this.group.add(this.body);
+
+        // Materials
+        const balaclava = new THREE.MeshStandardMaterial({ color: 0x1a1a1a, roughness: 0.95 });
+        const skinMat = new THREE.MeshStandardMaterial({ color: 0xc8a882, roughness: 0.85 });
+        const tacticalBlack = new THREE.MeshStandardMaterial({ color: 0x222222, roughness: 0.9 });
+        const vestOD = new THREE.MeshStandardMaterial({ color: 0x3a3e2a, roughness: 0.8 }); // olive drab vest
+        const vestPlate = new THREE.MeshStandardMaterial({ color: 0x4a4e3a, roughness: 0.6 });
+        const pantsMat = new THREE.MeshStandardMaterial({ color: 0x2e3028, roughness: 0.9 }); // dark camo pants
+        const bootMat = new THREE.MeshStandardMaterial({ color: 0x1a1410, roughness: 0.85 });
+        const strapMat = new THREE.MeshStandardMaterial({ color: 0x2a2a1e, roughness: 0.7 });
+        const gunMetal = new THREE.MeshStandardMaterial({ color: 0x111111, metalness: 0.85, roughness: 0.3 });
+
+        // === HEAD with balaclava ===
+        // Skull shape (slightly rounded box)
+        this.head = new THREE.Group();
+        this.head.position.y = 1.68;
+
+        const skull = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.26, 0.24), balaclava);
+        skull.position.y = 0;
+        this.head.add(skull);
+
+        // Balaclava top (rounded)
+        const skullTop = new THREE.Mesh(
+            new THREE.SphereGeometry(0.12, 8, 6, 0, Math.PI * 2, 0, Math.PI / 2),
+            balaclava
+        );
+        skullTop.position.y = 0.12;
+        this.head.add(skullTop);
+
+        // Eye slit area (skin showing through balaclava)
+        const eyeArea = new THREE.Mesh(
+            new THREE.BoxGeometry(0.18, 0.05, 0.02),
+            skinMat
+        );
+        eyeArea.position.set(0, 0.03, 0.12);
+        this.head.add(eyeArea);
+
+        // Eyes
+        const eyeMat = new THREE.MeshBasicMaterial({ color: 0xeeeeee });
+        const pupilMat = new THREE.MeshBasicMaterial({ color: 0x111111 });
+        for (const side of [-1, 1]) {
+            const eyeWhite = new THREE.Mesh(new THREE.SphereGeometry(0.018, 6, 4), eyeMat);
+            eyeWhite.position.set(side * 0.045, 0.03, 0.125);
+            this.head.add(eyeWhite);
+            const pupil = new THREE.Mesh(new THREE.SphereGeometry(0.01, 4, 4), pupilMat);
+            pupil.position.set(side * 0.045, 0.03, 0.135);
+            this.head.add(pupil);
+        }
+
+        // Neck
+        const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.07, 0.08, 6), balaclava);
+        neck.position.y = -0.17;
+        this.head.add(neck);
+
+        this.body.add(this.head);
+
+        // === TORSO with body armor ===
+        this.torso = new THREE.Group();
+        this.torso.position.y = 1.25;
+
+        // Base torso (shirt/jacket)
+        const torsoBase = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.52, 0.22), tacticalBlack);
+        this.torso.add(torsoBase);
+
+        // Plate carrier vest
+        const vestFront = new THREE.Mesh(new THREE.BoxGeometry(0.36, 0.40, 0.05), vestOD);
+        vestFront.position.z = 0.12;
+        this.torso.add(vestFront);
+
+        const vestBack = new THREE.Mesh(new THREE.BoxGeometry(0.36, 0.40, 0.05), vestOD);
+        vestBack.position.z = -0.12;
+        this.torso.add(vestBack);
+
+        // Armor plate (front)
+        const plateFront = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.28, 0.03), vestPlate);
+        plateFront.position.set(0, 0.02, 0.155);
+        this.torso.add(plateFront);
+
+        // MOLLE pouches on vest
+        for (let i = -1; i <= 1; i++) {
+            const pouch = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.1, 0.06), strapMat);
+            pouch.position.set(i * 0.1, -0.12, 0.16);
+            this.torso.add(pouch);
+        }
+
+        // Shoulder straps
+        for (const side of [-1, 1]) {
+            const strap = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.4, 0.03), vestOD);
+            strap.position.set(side * 0.15, 0.05, 0.08);
+            this.torso.add(strap);
+        }
+
+        // Collar / neck guard
+        const collar = new THREE.Mesh(new THREE.BoxGeometry(0.35, 0.06, 0.2), vestOD);
+        collar.position.y = 0.28;
+        this.torso.add(collar);
+
+        // Belt
+        const belt = new THREE.Mesh(new THREE.BoxGeometry(0.44, 0.06, 0.24), strapMat);
+        belt.position.y = -0.26;
+        this.torso.add(belt);
+
+        // Holster on belt (right side)
+        const holster = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.12, 0.08), tacticalBlack);
+        holster.position.set(0.22, -0.24, 0.04);
+        this.torso.add(holster);
+
+        this.body.add(this.torso);
+
+        // === ARMS ===
+        // Upper arms + forearms with rolled sleeves look
+        const upperArmGeo = new THREE.BoxGeometry(0.11, 0.28, 0.12);
+        const forearmGeo = new THREE.BoxGeometry(0.10, 0.24, 0.11);
+
+        this.leftArm = new THREE.Group();
+        this.leftArm.position.set(-0.28, 1.35, 0);
+        const luArm = new THREE.Mesh(upperArmGeo, tacticalBlack);
+        luArm.position.y = -0.1;
+        this.leftArm.add(luArm);
+        const lfArm = new THREE.Mesh(forearmGeo, tacticalBlack);
+        lfArm.position.y = -0.34;
+        this.leftArm.add(lfArm);
+        // Glove
+        const lGlove = new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.08, 0.1), new THREE.MeshStandardMaterial({ color: 0x2a2a1e, roughness: 0.8 }));
+        lGlove.position.y = -0.5;
+        this.leftArm.add(lGlove);
+        this.body.add(this.leftArm);
+
+        this.rightArm = new THREE.Group();
+        this.rightArm.position.set(0.28, 1.35, 0);
+        const ruArm = new THREE.Mesh(upperArmGeo, tacticalBlack);
+        ruArm.position.y = -0.1;
+        this.rightArm.add(ruArm);
+        const rfArm = new THREE.Mesh(forearmGeo, tacticalBlack);
+        rfArm.position.y = -0.34;
+        this.rightArm.add(rfArm);
+        const rGlove = new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.08, 0.1), new THREE.MeshStandardMaterial({ color: 0x2a2a1e, roughness: 0.8 }));
+        rGlove.position.y = -0.5;
+        this.rightArm.add(rGlove);
+        this.body.add(this.rightArm);
+
+        // === LEGS with knee pads and boots ===
+        const thighGeo = new THREE.BoxGeometry(0.14, 0.36, 0.16);
+        const shinGeo = new THREE.BoxGeometry(0.13, 0.32, 0.15);
+        const kneePadGeo = new THREE.BoxGeometry(0.1, 0.08, 0.06);
+
+        this.leftLeg = new THREE.Group();
+        this.leftLeg.position.set(-0.11, 0.7, 0);
+        const lThigh = new THREE.Mesh(thighGeo, pantsMat);
+        lThigh.position.y = -0.12;
+        this.leftLeg.add(lThigh);
+        const lKnee = new THREE.Mesh(kneePadGeo, strapMat);
+        lKnee.position.set(0, -0.32, 0.08);
+        this.leftLeg.add(lKnee);
+        const lShin = new THREE.Mesh(shinGeo, pantsMat);
+        lShin.position.y = -0.48;
+        this.leftLeg.add(lShin);
+        // Boot
+        const lBoot = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.14, 0.2), bootMat);
+        lBoot.position.set(0, -0.68, 0.02);
+        this.leftLeg.add(lBoot);
+        this.body.add(this.leftLeg);
+
+        this.rightLeg = new THREE.Group();
+        this.rightLeg.position.set(0.11, 0.7, 0);
+        const rThigh = new THREE.Mesh(thighGeo, pantsMat);
+        rThigh.position.y = -0.12;
+        this.rightLeg.add(rThigh);
+        const rKnee = new THREE.Mesh(kneePadGeo, strapMat);
+        rKnee.position.set(0, -0.32, 0.08);
+        this.rightLeg.add(rKnee);
+        const rShin = new THREE.Mesh(shinGeo, pantsMat);
+        rShin.position.y = -0.48;
+        this.rightLeg.add(rShin);
+        const rBoot = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.14, 0.2), bootMat);
+        rBoot.position.set(0, -0.68, 0.02);
+        this.rightLeg.add(rBoot);
+        this.body.add(this.rightLeg);
+
+        // === WEAPON (AK-style rifle) ===
+        this.weapon = new THREE.Group();
+        this.weapon.position.set(0.28, 1.15, -0.15);
+        // Receiver
+        const wReceiver = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.06, 0.3), gunMetal);
+        this.weapon.add(wReceiver);
+        // Barrel
+        const wBarrel = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.015, 0.25, 6), gunMetal);
+        wBarrel.rotation.x = Math.PI / 2;
+        wBarrel.position.z = -0.27;
+        this.weapon.add(wBarrel);
+        // Magazine
+        const wMag = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.12, 0.04),
+            new THREE.MeshStandardMaterial({ color: 0x1a1a1a, roughness: 0.5 }));
+        wMag.position.set(0, -0.08, 0.02);
+        wMag.rotation.x = 0.15;
+        this.weapon.add(wMag);
+        // Stock
+        const wStock = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.05, 0.15),
+            new THREE.MeshStandardMaterial({ color: 0x3a2a1a, roughness: 0.7 }));
+        wStock.position.z = 0.22;
+        this.weapon.add(wStock);
+        this.body.add(this.weapon);
+    }
+
+    hearSound(playerX, playerZ, sound) {
+        if (this.state === ENEMY_STATE.DEAD) return;
+        if (this.state === ENEMY_STATE.IDLE) {
+            this.state = ENEMY_STATE.ALERT;
+            this.stateTimer = 0;
+            if (sound) sound.playEnemyAlert();
+        }
+    }
+
+    takeDamage(sound, impulseDir, colliders) {
+        if (this.state === ENEMY_STATE.DEAD) return;
+        this.hp--;
+
+        const dir = impulseDir || new THREE.Vector3(0, 0, -1);
+
+        if (this.hp <= 0) {
+            this.state = ENEMY_STATE.DEAD;
+            this.stateTimer = 0;
+            this.settleTimer = 0;
+            if (sound) sound.playEnemyDeath();
+            if (this.ragdollActive && this.ragdoll) {
+                // Second hit — extra impulse to already-ragdolled body
+                this.ragdoll.applyHitImpulse(dir, 6);
+            } else {
+                // Activate ragdoll for instant death (e.g. if first shot kills)
+                this.activateRagdoll(dir, colliders);
+            }
+            return true; // killed
+        } else {
+            this.state = ENEMY_STATE.WOUNDED;
+            this.stateTimer = 0;
+            this.woundFallProgress = 0;
+            this.woundWritheTimer = 0;
+            if (sound) sound.playEnemyPain();
+            // Activate ragdoll on first hit
+            this.activateRagdoll(dir, colliders);
+            return false;
+        }
+    }
+
+    canSeePlayer(playerPos, doorOpen) {
+        // Can only see player if the apartment door is open
+        if (!doorOpen) return false;
+        const enemyPos = new THREE.Vector3(
+            this.group.position.x,
+            1.5,
+            this.group.position.z
+        );
+        const dist = enemyPos.distanceTo(playerPos);
+        return dist < 15;
+    }
+
+    // Resolve enemy position against wall colliders
+    resolveCollisions(colliders) {
+        const px = this.group.position.x;
+        const pz = this.group.position.z;
+        let nx = px, nz = pz;
+        for (let iter = 0; iter < 3; iter++) {
+            for (const col of colliders) {
+                if (!col) continue;
+                if (col.intersectsSphere(nx, nz, this.radius)) {
+                    const push = col.resolve(nx, nz, this.radius);
+                    if (push) { nx += push.x; nz += push.z; }
+                }
+            }
+        }
+        this.group.position.x = nx;
+        this.group.position.z = nz;
+    }
+
+    update(dt, playerPos, game, doorOpen, colliders) {
+        this.stateTimer += dt;
+
+        // group stays on the floor
+        this.group.position.y = 0;
+        this.group.rotation.z = 0;
+        this.group.rotation.x = 0;
+
+        // Face player (except dead/wounded)
+        if (this.state !== ENEMY_STATE.DEAD && this.state !== ENEMY_STATE.WOUNDED
+            && (doorOpen || this.state === ENEMY_STATE.RUSHING)) {
+            const dx = playerPos.x - this.group.position.x;
+            const dz = playerPos.z - this.group.position.z;
+            const angle = Math.atan2(dx, dz);
+            this.group.rotation.y = angle;
+        }
+
+        // Reset body pivot for standing states
+        if (this.state !== ENEMY_STATE.DEAD && this.state !== ENEMY_STATE.WOUNDED) {
+            this.body.rotation.set(0, 0, 0);
+        }
+
+        switch (this.state) {
+            case ENEMY_STATE.IDLE:
+                break;
+
+            case ENEMY_STATE.ALERT:
+                if (this.stateTimer > 1.0 && this.canSeePlayer(playerPos, doorOpen)) {
+                    this.state = ENEMY_STATE.ATTACKING;
+                    this.stateTimer = 0;
+                    this.shootTimer = 0;
+                }
+                this.rightArm.rotation.x = -0.5;
+                this.weapon.position.z = -0.25;
+                break;
+
+            case ENEMY_STATE.ATTACKING:
+                this.rightArm.rotation.x = -1.2;
+                this.weapon.position.z = -0.35;
+                this.weapon.position.y = 1.3;
+
+                this.shootTimer += dt;
+                if (this.shootTimer > 1.5 && !this.hasShot) {
+                    this.hasShot = true;
+                    this.shootAtPlayer(playerPos, game);
+                }
+                if (this.shootTimer > 2.5) {
+                    this.shootTimer = 0;
+                    this.hasShot = false;
+                    if (Math.random() < 0.4) {
+                        this.state = ENEMY_STATE.RUSHING;
+                        this.stateTimer = 0;
+                    }
+                }
+                break;
+
+            case ENEMY_STATE.RUSHING: {
+                // Move toward player with wall collision
+                const rdx = playerPos.x - this.group.position.x;
+                const rdz = playerPos.z - this.group.position.z;
+                const rdist = Math.sqrt(rdx * rdx + rdz * rdz);
+                if (rdist > 1.5) {
+                    this.group.position.x += (rdx / rdist) * this.rushSpeed * dt;
+                    this.group.position.z += (rdz / rdist) * this.rushSpeed * dt;
+                    // Collide with walls
+                    if (colliders) this.resolveCollisions(colliders);
+                    // Leg animation
+                    const walkPhase = this.stateTimer * 8;
+                    this.leftLeg.rotation.x = Math.sin(walkPhase) * 0.5;
+                    this.rightLeg.rotation.x = -Math.sin(walkPhase) * 0.5;
+                }
+                this.shootTimer += dt;
+                if (this.shootTimer > 2.0) {
+                    this.state = ENEMY_STATE.ATTACKING;
+                    this.stateTimer = 0;
+                    this.shootTimer = 0;
+                    this.hasShot = false;
+                }
+                break;
+            }
+
+            case ENEMY_STATE.WOUNDED: {
+                // Ragdoll-driven fall and writhing
+                if (this.ragdollActive && this.ragdoll) {
+                    this.ragdoll.update(dt, colliders);
+                    this.syncMeshToRagdoll();
+
+                    // Writhing impulses — periodic small nudges to limbs
+                    this.woundWritheTimer += dt;
+                    if (this.woundWritheTimer > 0.6 && this.stateTimer > 0.8) {
+                        this.woundWritheTimer = 0;
+                        const rp = this.ragdoll.particles;
+                        // Small random writhe on hands/head
+                        const wx = (Math.random() - 0.5) * 1.5;
+                        const wz = (Math.random() - 0.5) * 1.5;
+                        rp.lHand.applyImpulse(wx, 0.8, wz);
+                        rp.rHand.applyImpulse(-wx, 0.5, -wz);
+                        rp.head.applyImpulse(wx * 0.3, 0.3, wz * 0.3);
+                        // Occasional leg twitch
+                        if (Math.random() < 0.4) {
+                            rp.lFoot.applyImpulse(0, 0.5, (Math.random() - 0.5));
+                        }
+                    }
+
+                    // Gradually settle after initial fall
+                    if (this.stateTimer > 2.0) {
+                        this.ragdoll.settle(0.02);
+                    }
+                }
+
+                this.shootTimer += dt;
+                if (this.shootTimer > 2.5 && !this.hasShot) {
+                    this.hasShot = true;
+                    this.shootAtPlayer(playerPos, game);
+                }
+                if (this.shootTimer > 4.0) {
+                    this.shootTimer = 0;
+                    this.hasShot = false;
+                }
+                break;
+            }
+
+            case ENEMY_STATE.DEAD: {
+                // Ragdoll-driven death
+                if (this.ragdollActive && this.ragdoll) {
+                    this.ragdoll.update(dt, colliders);
+                    this.syncMeshToRagdoll();
+
+                    // Settle the body over time
+                    this.settleTimer += dt;
+                    if (this.settleTimer > 0.5) {
+                        this.ragdoll.settle(0.04);
+                    }
+                    if (this.settleTimer > 2.0) {
+                        this.ragdoll.settle(0.1);
+                    }
+                    // Death twitches in the first second
+                    if (this.stateTimer < 1.0) {
+                        const rp = this.ragdoll.particles;
+                        const tw = (1 - this.stateTimer) * 0.3;
+                        if (Math.random() < 0.3) {
+                            rp.lHand.applyImpulse(
+                                (Math.random() - 0.5) * tw,
+                                Math.random() * tw * 0.5,
+                                (Math.random() - 0.5) * tw
+                            );
+                            rp.rHand.applyImpulse(
+                                (Math.random() - 0.5) * tw,
+                                Math.random() * tw * 0.5,
+                                (Math.random() - 0.5) * tw
+                            );
+                        }
+                    }
+                }
+                break;
+            }
+        }
+    }
+
+    shootAtPlayer(playerPos, game) {
+        game.sound.playEnemyShot();
+
+        // Accuracy based on state
+        const accuracy = this.state === ENEMY_STATE.WOUNDED ? 0.25 : 0.4;
+        if (Math.random() < accuracy) {
+            game.damagePlayer();
+        }
+    }
+
+    getPosition() {
+        return this.group.position;
+    }
+
+    getBoundingBox() {
+        const p = this.group.position;
+        return new AABB(p.x - 0.25, p.z - 0.15, p.x + 0.25, p.z + 0.15, 0, 1.9);
+    }
+}
+
+// ============================================================
+// EnemyManager
+// ============================================================
+class EnemyManager {
+    constructor(scene, doorPositions) {
+        this.enemies = [];
+        this.killCount = 0;
+
+        for (let i = 0; i < doorPositions.length; i++) {
+            const dp = doorPositions[i];
+            // Spawn enemy inside apartment
+            const aptCenterX = dp.x + dp.side * 3;
+            const aptCenterZ = dp.z + (Math.random() - 0.5) * 2;
+            const enemy = new Enemy(scene, aptCenterX, aptCenterZ, dp.side, i);
+            this.enemies.push(enemy);
+        }
+    }
+
+    update(dt, playerPos, game, doors, colliders) {
+        for (let i = 0; i < this.enemies.length; i++) {
+            const doorOpen = doors[i] ? doors[i].isOpen : false;
+            this.enemies[i].update(dt, playerPos, game, doorOpen, colliders);
+        }
+    }
+
+    notifySound(playerX, playerZ, radius, sound) {
+        for (const enemy of this.enemies) {
+            const dx = enemy.group.position.x - playerX;
+            const dz = enemy.group.position.z - playerZ;
+            if (Math.sqrt(dx * dx + dz * dz) < radius) {
+                enemy.hearSound(playerX, playerZ, sound);
+            }
+        }
+    }
+
+    checkHits(raycaster) {
+        const hits = [];
+        for (const enemy of this.enemies) {
+            if (enemy.state === ENEMY_STATE.DEAD) continue;
+            const p = enemy.group.position;
+            let box;
+            if (enemy.ragdollActive) {
+                // Ragdolled enemy is on the ground — wider, shorter bounding box
+                box = new THREE.Box3(
+                    new THREE.Vector3(p.x - 0.8, p.y, p.z - 0.8),
+                    new THREE.Vector3(p.x + 0.8, p.y + 0.6, p.z + 0.8)
+                );
+            } else {
+                // Standing enemy
+                box = new THREE.Box3(
+                    new THREE.Vector3(p.x - 0.3, p.y, p.z - 0.2),
+                    new THREE.Vector3(p.x + 0.3, p.y + 1.9, p.z + 0.2)
+                );
+            }
+            if (raycaster.ray.intersectsBox(box)) {
+                const origin = raycaster.ray.origin;
+                const cy = enemy.ragdollActive ? 0.3 : 1.0;
+                const dist = origin.distanceTo(new THREE.Vector3(p.x, p.y + cy, p.z));
+                hits.push({ enemy, dist });
+            }
+        }
+        hits.sort((a, b) => a.dist - b.dist);
+        return hits;
+    }
+}
+
+// ============================================================
+// Player
+// ============================================================
+class Player {
+    constructor(camera, input) {
+        this.camera = camera;
+        this.input = input;
+        this.position = new THREE.Vector3(0, 1.6, 1);
+        this.yaw = Math.PI; // Face +Z (down the corridor)
+        this.pitch = 0;
+        this.speed = 4;
+        this.radius = 0.3;
+        this.hp = 2;
+        this.maxHp = 2;
+        this.moveDir = new THREE.Vector3();
+
+        // Camera bob
+        this.bobTimer = 0;
+        this.bobAmount = 0;
+        this.isMoving = false;
+
+        // Footstep
+        this.footstepTimer = 0;
+
+        camera.position.copy(this.position);
+    }
+
+    update(dt, colliders, sound) {
+        if (!this.input.locked) return;
+
+        const mouse = this.input.consumeMouse();
+        const sensitivity = 0.002;
+        this.yaw -= mouse.dx * sensitivity;
+        this.pitch -= mouse.dy * sensitivity;
+        this.pitch = Math.max(-Math.PI / 2 + 0.01, Math.min(Math.PI / 2 - 0.01, this.pitch));
+
+        // WASD movement - forward is where camera looks
+        const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(
+            new THREE.Quaternion().setFromEuler(new THREE.Euler(0, this.yaw, 0, 'YXZ'))
+        );
+        const right = new THREE.Vector3(1, 0, 0).applyQuaternion(
+            new THREE.Quaternion().setFromEuler(new THREE.Euler(0, this.yaw, 0, 'YXZ'))
+        );
+        let worldX = 0, worldZ = 0;
+        if (this.input.keys['KeyW']) { worldX += forward.x; worldZ += forward.z; }
+        if (this.input.keys['KeyS']) { worldX -= forward.x; worldZ -= forward.z; }
+        if (this.input.keys['KeyA']) { worldX -= right.x; worldZ -= right.z; }
+        if (this.input.keys['KeyD']) { worldX += right.x; worldZ += right.z; }
+
+        this.isMoving = worldX !== 0 || worldZ !== 0;
+
+        if (this.isMoving) {
+            const len = Math.sqrt(worldX * worldX + worldZ * worldZ);
+            worldX /= len;
+            worldZ /= len;
+
+            let newX = this.position.x + worldX * this.speed * dt;
+            let newZ = this.position.z + worldZ * this.speed * dt;
+
+            // Collision resolution
+            for (let iter = 0; iter < 3; iter++) {
+                for (const col of colliders) {
+                    if (!col) continue;
+                    if (col.intersectsSphere(newX, newZ, this.radius)) {
+                        const push = col.resolve(newX, newZ, this.radius);
+                        if (push) {
+                            newX += push.x;
+                            newZ += push.z;
+                        }
+                    }
+                }
+            }
+
+            this.position.x = newX;
+            this.position.z = newZ;
+
+            // Camera bob
+            this.bobTimer += dt * 10;
+            this.bobAmount = Math.sin(this.bobTimer) * 0.03;
+
+            // Footsteps
+            this.footstepTimer += dt;
+            if (this.footstepTimer > 0.4) {
+                this.footstepTimer = 0;
+                if (sound) sound.playFootstep();
+            }
+        } else {
+            this.bobAmount *= 0.9;
+            this.bobTimer = 0;
+        }
+
+        // Update camera
+        this.camera.position.set(
+            this.position.x,
+            this.position.y + this.bobAmount,
+            this.position.z
+        );
+
+        const euler = new THREE.Euler(this.pitch, this.yaw, 0, 'YXZ');
+        this.camera.quaternion.setFromEuler(euler);
+    }
+
+    getPosition3() {
+        return new THREE.Vector3(this.position.x, 1.5, this.position.z);
+    }
+}
+
+// ============================================================
+// UIManager
+// ============================================================
+class UIManager {
+    constructor() {
+        this.crosshair = document.getElementById('crosshair');
+        this.vignette = document.getElementById('vignette');
+        this.bloodVignette = document.getElementById('bloodVignette');
+        this.filmGrain = document.getElementById('filmGrain');
+        this.interactionPrompt = document.getElementById('interactionPrompt');
+        this.liveFeed = document.getElementById('liveFeed');
+        this.killCounter = document.getElementById('killCounter');
+        this.menuScreen = document.getElementById('menuScreen');
+        this.deathScreen = document.getElementById('deathScreen');
+        this.victoryScreen = document.getElementById('victoryScreen');
+        this.screenShakeAmount = 0;
+    }
+
+    showGameUI() {
+        this.crosshair.style.display = 'flex';
+        this.vignette.style.display = 'block';
+        this.filmGrain.style.display = 'block';
+        this.liveFeed.style.display = 'flex';
+        this.killCounter.style.display = 'block';
+    }
+
+    hideGameUI() {
+        this.crosshair.style.display = 'none';
+        this.vignette.style.display = 'none';
+        this.filmGrain.style.display = 'none';
+        this.liveFeed.style.display = 'none';
+        this.killCounter.style.display = 'none';
+        this.interactionPrompt.style.display = 'none';
+    }
+
+    showScreen(name) {
+        this.menuScreen.style.display = 'none';
+        this.deathScreen.style.display = 'none';
+        this.victoryScreen.style.display = 'none';
+        if (name === 'menu') this.menuScreen.style.display = 'flex';
+        if (name === 'death') this.deathScreen.style.display = 'flex';
+        if (name === 'victory') this.victoryScreen.style.display = 'flex';
+    }
+
+    hideAllScreens() {
+        this.menuScreen.style.display = 'none';
+        this.deathScreen.style.display = 'none';
+        this.victoryScreen.style.display = 'none';
+    }
+
+    showInteraction(show) {
+        this.interactionPrompt.style.display = show ? 'flex' : 'none';
+    }
+
+    setBloodVignette(amount) {
+        this.bloodVignette.style.opacity = amount;
+    }
+
+    updateKillCounter(kills) {
+        this.killCounter.textContent = `TARGETS: ${kills} / 10`;
+    }
+
+    screenShake(amount) {
+        this.screenShakeAmount = amount;
+    }
+
+    updateShake(dt) {
+        if (this.screenShakeAmount > 0.01) {
+            this.screenShakeAmount *= Math.pow(0.01, dt);
+            const ox = (Math.random() - 0.5) * this.screenShakeAmount * 10;
+            const oy = (Math.random() - 0.5) * this.screenShakeAmount * 10;
+            document.getElementById('gameCanvas').style.transform = `translate(${ox}px, ${oy}px)`;
+        } else {
+            this.screenShakeAmount = 0;
+            document.getElementById('gameCanvas').style.transform = '';
+        }
+    }
+}
+
+// ============================================================
+// Game - Master Controller
+// ============================================================
+const GAME_STATE = {
+    MENU: 'MENU',
+    PLAYING: 'PLAYING',
+    DEAD: 'DEAD',
+    VICTORY: 'VICTORY'
+};
+
+class Game {
+    constructor() {
+        this.canvas = document.getElementById('gameCanvas');
+        this.state = GAME_STATE.MENU;
+
+        // Three.js setup
+        this.renderer = new THREE.WebGLRenderer({ canvas: this.canvas, antialias: true });
+        this.renderer.setSize(window.innerWidth, window.innerHeight);
+        this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        this.renderer.shadowMap.enabled = false;
+        this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+        this.renderer.toneMappingExposure = 1.6;
+
+        this.scene = new THREE.Scene();
+        this.scene.background = new THREE.Color(0x0a0806);
+
+        this.camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 100);
+        this.scene.add(this.camera);
+
+        this.clock = new THREE.Clock();
+
+        // Managers
+        this.input = new InputManager(this.canvas);
+        this.sound = new SoundManager();
+        this.ui = new UIManager();
+
+        // Game objects (created on start)
+        this.level = null;
+        this.player = null;
+        this.weapon = null;
+        this.doors = [];
+        this.enemyManager = null;
+
+        // Wall hit marks
+        this.hitMarks = [];
+
+        // Screen shake from damage
+        this.damageFlashTimer = 0;
+
+        this.setupEvents();
+        this.ui.showScreen('menu');
+        this.loop();
+    }
+
+    setupEvents() {
+        document.getElementById('deployBtn').addEventListener('click', () => this.startGame());
+        document.getElementById('retryBtn').addEventListener('click', () => this.startGame());
+        document.getElementById('victoryBtn').addEventListener('click', () => {
+            this.state = GAME_STATE.MENU;
+            this.ui.showScreen('menu');
+            this.ui.hideGameUI();
+            if (document.pointerLockElement) document.exitPointerLock();
+        });
+
+        window.addEventListener('resize', () => {
+            this.camera.aspect = window.innerWidth / window.innerHeight;
+            this.camera.updateProjectionMatrix();
+            this.renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+    }
+
+    startGame() {
+        this.state = GAME_STATE.PLAYING;
+        this.ui.hideAllScreens();
+        this.ui.showGameUI();
+        this.ui.setBloodVignette(0);
+        this.sound.stopHeartbeat();
+        if (this.sound.ambientSrc) {
+            try { this.sound.ambientSrc.stop(); } catch(e) {}
+            this.sound.ambientSrc = null;
+        }
+
+        // Reset scene
+        while (this.scene.children.length > 0) {
+            this.scene.remove(this.scene.children[0]);
+        }
+        // Clear camera children (old weapon)
+        while (this.camera.children.length > 0) {
+            this.camera.remove(this.camera.children[0]);
+        }
+        this.scene.add(this.camera);
+        this.scene.fog = null;
+
+        // Build level
+        this.level = new Level(this.scene);
+
+        // Create player
+        this.player = new Player(this.camera, this.input);
+
+        // Create weapon
+        this.weapon = new Weapon(this.camera);
+
+        // Create doors
+        this.doors = [];
+        for (const dp of this.level.doorPositions) {
+            const door = new Door(this.scene, { x: dp.x, z: dp.z }, dp.side, dp.index);
+            this.doors.push(door);
+        }
+
+        // Create enemies
+        this.enemyManager = new EnemyManager(this.scene, this.level.doorPositions);
+
+        // Hit marks array
+        this.hitMarks = [];
+        this.damageFlashTimer = 0;
+
+        // Request pointer lock
+        this.input.requestLock();
+
+        // Start ambient sound
+        this.sound.ensure();
+        this.sound.playAmbient();
+
+        this.ui.updateKillCounter(0);
+    }
+
+    damagePlayer() {
+        if (this.state !== GAME_STATE.PLAYING) return;
+        this.player.hp--;
+        this.sound.playPlayerHit();
+        this.ui.screenShake(1.0);
+        this.damageFlashTimer = 0.5;
+
+        if (this.player.hp <= 0) {
+            // Death
+            this.state = GAME_STATE.DEAD;
+            this.sound.stopHeartbeat();
+            this.ui.setBloodVignette(1.0);
+            setTimeout(() => {
+                this.ui.showScreen('death');
+                this.ui.hideGameUI();
+                if (document.pointerLockElement) document.exitPointerLock();
+            }, 1000);
+        } else {
+            // Wounded
+            this.ui.setBloodVignette(0.6);
+            this.sound.startHeartbeat();
+        }
+    }
+
+    handleShooting() {
+        if (!this.input.leftJustPressed) return;
+        this.input.leftJustPressed = false;
+        if (!this.weapon.shoot(this.sound)) return;
+
+        // Screen shake
+        this.ui.screenShake(0.3);
+
+        // 8-pellet shotgun spread
+        const spread = this.weapon.getSpreadAngle();
+        const pelletCount = 8;
+        let hitEnemy = false;
+
+        // Track which enemies were already damaged THIS shot (prevent 8-pellet = 8 damage)
+        const damagedThisShot = new Set();
+
+        // Notify enemies of sound
+        this.enemyManager.notifySound(
+            this.player.position.x,
+            this.player.position.z,
+            20,
+            this.sound
+        );
+
+        const camDir = new THREE.Vector3();
+        this.camera.getWorldDirection(camDir);
+
+        for (let i = 0; i < pelletCount; i++) {
+            const pelletDir = camDir.clone();
+            pelletDir.x += (Math.random() - 0.5) * spread;
+            pelletDir.y += (Math.random() - 0.5) * spread;
+            pelletDir.z += (Math.random() - 0.5) * spread;
+            pelletDir.normalize();
+
+            const ray = new THREE.Raycaster(
+                this.camera.position.clone(),
+                pelletDir,
+                0.1,
+                50
+            );
+
+            // Check enemy hits
+            const enemyHits = this.enemyManager.checkHits(ray);
+            if (enemyHits.length > 0) {
+                const hit = enemyHits[0];
+                // Only deal damage once per enemy per shot
+                if (!damagedThisShot.has(hit.enemy)) {
+                    damagedThisShot.add(hit.enemy);
+                    const killed = hit.enemy.takeDamage(
+                        this.sound,
+                        pelletDir.clone(),
+                        this.level ? this.level.colliders : null
+                    );
+                    if (killed) {
+                        this.enemyManager.killCount++;
+                        this.ui.updateKillCounter(this.enemyManager.killCount);
+                    }
+                }
+                hitEnemy = true;
+                continue;
+            }
+
+            // Check wall hits (scene intersect)
+            const intersects = ray.intersectObjects(this.scene.children, true);
+            if (intersects.length > 0) {
+                // Skip weapon and enemy meshes
+                let wallHit = null;
+                for (const inter of intersects) {
+                    let skip = false;
+                    let obj = inter.object;
+                    while (obj) {
+                        if (obj === this.weapon.group) { skip = true; break; }
+                        for (const e of this.enemyManager.enemies) {
+                            if (obj === e.group) { skip = true; break; }
+                        }
+                        if (skip) break;
+                        obj = obj.parent;
+                    }
+                    if (!skip) { wallHit = inter; break; }
+                }
+                if (wallHit && wallHit.point) {
+                    this.addHitMark(wallHit.point, wallHit.face ? wallHit.face.normal : new THREE.Vector3(0, 0, 1));
+                }
+            }
+        }
+    }
+
+    addHitMark(position, normal) {
+        const geo = new THREE.PlaneGeometry(0.05, 0.05);
+        const mat = new THREE.MeshBasicMaterial({ color: 0x111111, transparent: true, opacity: 0.8, depthWrite: false });
+        const mark = new THREE.Mesh(geo, mat);
+        mark.position.copy(position);
+        mark.position.addScaledVector(normal, 0.01);
+        mark.lookAt(position.clone().add(normal));
+        this.scene.add(mark);
+        this.hitMarks.push({ mesh: mark, life: 5 });
+
+        // Limit hit marks
+        if (this.hitMarks.length > 50) {
+            const old = this.hitMarks.shift();
+            this.scene.remove(old.mesh);
+        }
+    }
+
+    checkVictory() {
+        if (this.enemyManager.killCount >= 10) {
+            // Check if player is near spawn
+            const dx = this.player.position.x;
+            const dz = this.player.position.z - 1;
+            if (Math.sqrt(dx * dx + dz * dz) < 2) {
+                this.state = GAME_STATE.VICTORY;
+                this.sound.stopHeartbeat();
+                this.ui.showScreen('victory');
+                this.ui.hideGameUI();
+                if (document.pointerLockElement) document.exitPointerLock();
+            }
+        }
+    }
+
+    update(dt) {
+        if (this.state !== GAME_STATE.PLAYING) return;
+        if (dt > 0.1) dt = 0.1; // Clamp delta
+
+        // Gather all colliders including doors
+        const allColliders = [...this.level.colliders];
+        for (const door of this.doors) {
+            const col = door.getCollider();
+            if (col) allColliders.push(col);
+        }
+
+        // Player update
+        this.player.update(dt, allColliders, this.sound);
+
+        // Weapon update
+        this.weapon.update(dt, this.input.mouseDown.right, this.sound);
+
+        // Weapon sway
+        if (this.player.isMoving) {
+            const sway = Math.sin(this.player.bobTimer * 0.7) * 0.005;
+            this.weapon.group.position.x += sway;
+        }
+
+        // Shooting
+        this.handleShooting();
+
+        // Reload
+        if (this.input.wasPressed('KeyR')) {
+            this.weapon.startReload(this.sound);
+        }
+
+        // Door interaction
+        let nearDoor = null;
+        for (const door of this.doors) {
+            door.update(dt);
+            if (!door.isOpen && door.isNear(this.player.position.x, this.player.position.z, 2.0)) {
+                nearDoor = door;
+            }
+        }
+
+        this.ui.showInteraction(nearDoor !== null);
+
+        if (nearDoor && this.input.wasPressed('KeyF')) {
+            nearDoor.kick(this.sound);
+            // Notify enemies
+            this.enemyManager.notifySound(
+                nearDoor.position.x,
+                nearDoor.position.z,
+                15,
+                this.sound
+            );
+        }
+
+        // Enemy update
+        this.enemyManager.update(dt, this.player.getPosition3(), this, this.doors, allColliders);
+
+        // Damage flash
+        if (this.damageFlashTimer > 0) {
+            this.damageFlashTimer -= dt;
+        }
+
+        // Blood vignette pulse when wounded
+        if (this.player.hp === 1) {
+            const pulse = 0.4 + Math.sin(Date.now() * 0.003) * 0.15;
+            this.ui.setBloodVignette(pulse);
+        }
+
+        // Hit mark lifetime
+        for (let i = this.hitMarks.length - 1; i >= 0; i--) {
+            this.hitMarks[i].life -= dt;
+            if (this.hitMarks[i].life <= 0) {
+                this.scene.remove(this.hitMarks[i].mesh);
+                this.hitMarks.splice(i, 1);
+            }
+        }
+
+        // Light flickering
+        if (this.level.lights.length > 0) {
+            for (const light of this.level.lights) {
+                light.intensity += (Math.random() - 0.5) * 0.02;
+                light.intensity = Math.max(0.2, Math.min(0.8, light.intensity));
+            }
+        }
+
+        // Film grain animation
+        const grain = document.getElementById('filmGrain');
+        if (grain) {
+            grain.style.transform = `translate(${(Math.random()-0.5)*4}px, ${(Math.random()-0.5)*4}px)`;
+        }
+
+        // Screen shake
+        this.ui.updateShake(dt);
+
+        // Victory check
+        this.checkVictory();
+    }
+
+    loop() {
+        const dt = this.clock.getDelta();
+        this.update(dt);
+        this.renderer.render(this.scene, this.camera);
+        this.input.clearFrame();
+        requestAnimationFrame(() => this.loop());
+    }
+}
+
+// ============================================================
+// Start
+// ============================================================
+const game = new Game();
+</script>
+</body>
+</html>
