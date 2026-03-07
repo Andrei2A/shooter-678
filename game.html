@@ -693,6 +693,72 @@ canvas#gameCanvas {
 import * as THREE from 'three';
 
 // ============================================================
+// Constants
+// ============================================================
+const WEAPON_TYPE = { SHOTGUN: 'shotgun', PISTOL: 'pistol', SNIPER: 'sniper', KNIFE: 'knife' };
+
+// ============================================================
+// Scratch variables — reused to avoid per-frame/per-shot allocations
+// ============================================================
+const _scratchVec = new THREE.Vector3();
+const _scratchVec2 = new THREE.Vector3();
+const _scratchVec3 = new THREE.Vector3();
+const _scratchBox = new THREE.Box3();
+const _scratchBoxMin = new THREE.Vector3();
+const _scratchBoxMax = new THREE.Vector3();
+const _scratchQuat = new THREE.Quaternion();
+const _scratchEuler = new THREE.Euler(0, 0, 0, 'YXZ');
+const _scratchColor = new THREE.Color();
+const _scratchRay = new THREE.Raycaster();
+const _axisY = new THREE.Vector3(0, 1, 0);
+const _axisNegY = new THREE.Vector3(0, -1, 0);
+
+// ============================================================
+// Utility functions
+// ============================================================
+
+// 2D ray-AABB slab test. Returns { t, normalX, normalZ } or null.
+function rayAABB2D(ox, oz, dx, dz, col, maxDist) {
+    let tmin = 0, tmax = maxDist;
+    if (Math.abs(dx) > 0.001) {
+        let t1 = (col.minX - ox) / dx, t2 = (col.maxX - ox) / dx;
+        if (t1 > t2) { const tmp = t1; t1 = t2; t2 = tmp; }
+        tmin = Math.max(tmin, t1); tmax = Math.min(tmax, t2);
+    } else if (ox < col.minX || ox > col.maxX) return null;
+    if (Math.abs(dz) > 0.001) {
+        let t1 = (col.minZ - oz) / dz, t2 = (col.maxZ - oz) / dz;
+        if (t1 > t2) { const tmp = t1; t1 = t2; t2 = tmp; }
+        tmin = Math.max(tmin, t1); tmax = Math.min(tmax, t2);
+    } else if (oz < col.minZ || oz > col.maxZ) return null;
+    if (tmin <= tmax && tmin > 0.1 && tmin < maxDist) {
+        const hx = ox + dx * tmin, hz = oz + dz * tmin;
+        let nx = 0, nz = 0;
+        if (Math.abs(hx - col.minX) < 0.05) nx = -1;
+        else if (Math.abs(hx - col.maxX) < 0.05) nx = 1;
+        else if (Math.abs(hz - col.minZ) < 0.05) nz = -1;
+        else nz = 1;
+        return { t: tmin, normalX: nx, normalZ: nz };
+    }
+    return null;
+}
+
+// 2D ray-AABB for LOS check (unbounded start, returns boolean)
+function rayHitsAABB2D(ox, oz, dx, dz, col, len) {
+    let tmin = -Infinity, tmax = Infinity;
+    if (Math.abs(dx) > 1e-8) {
+        let t1 = (col.minX - ox) / dx, t2 = (col.maxX - ox) / dx;
+        if (t1 > t2) { const tmp = t1; t1 = t2; t2 = tmp; }
+        tmin = Math.max(tmin, t1); tmax = Math.min(tmax, t2);
+    } else if (ox < col.minX || ox > col.maxX) return false;
+    if (Math.abs(dz) > 1e-8) {
+        let t1 = (col.minZ - oz) / dz, t2 = (col.maxZ - oz) / dz;
+        if (t1 > t2) { const tmp = t1; t1 = t2; t2 = tmp; }
+        tmin = Math.max(tmin, t1); tmax = Math.min(tmax, t2);
+    } else if (oz < col.minZ || oz > col.maxZ) return false;
+    return tmin <= tmax && tmax > 0 && tmin < len;
+}
+
+// ============================================================
 // AABB - Axis-Aligned Bounding Box collision utility
 // ============================================================
 class AABB {
@@ -868,6 +934,7 @@ class Ragdoll {
         this.particles = {};
         this.constraints = [];
         this.active = false;
+        this._particleList = [];
     }
 
     init(worldX, worldZ, facingAngle) {
@@ -966,6 +1033,7 @@ class Ragdoll {
             new MinDistConstraint(p.head, p.lFoot, 0.35),
             new MinDistConstraint(p.head, p.rFoot, 0.35),
         ];
+        this._particleList = Object.values(this.particles);
     }
 
     activate(impulseDir, strength, hitZone, colliders) {
@@ -1027,7 +1095,7 @@ class Ragdoll {
         const fixedDt = 1 / 120;
         const steps = Math.min(Math.ceil(dt / fixedDt), 8);
         for (let step = 0; step < steps; step++) {
-            for (const p of Object.values(this.particles)) {
+            for (const p of this._particleList) {
                 p.integrate(fixedDt, airDamping);
             }
             // Constraint solving (multiple iterations)
@@ -1040,14 +1108,14 @@ class Ragdoll {
                     sc.solve();
                 }
             }
-            for (const p of Object.values(this.particles)) {
+            for (const p of this._particleList) {
                 p.collideFloor();
                 if (colliders) p.collideWalls(colliders);
             }
         }
         // Safety bounds: clamp particles within reasonable distance from spawn
         if (this.spawnX !== undefined) {
-            for (const p of Object.values(this.particles)) {
+            for (const p of this._particleList) {
                 const dx = p.pos.x - this.spawnX;
                 const dz = p.pos.z - this.spawnZ;
                 const maxDrift = 1.5;
@@ -1065,7 +1133,7 @@ class Ragdoll {
 
     // Apply extra damping to settle the body
     settle(amount) {
-        for (const p of Object.values(this.particles)) {
+        for (const p of this._particleList) {
             p.prev.lerp(p.pos, amount);
         }
     }
@@ -1076,9 +1144,9 @@ class Ragdoll {
 // Helper: orient a mesh so its local axis aligns with a direction
 function orientMeshAlongAxis(mesh, dir, localAxis) {
     if (dir.lengthSq() < 0.0001) return;
-    const q = new THREE.Quaternion();
-    q.setFromUnitVectors(localAxis, dir.clone().normalize());
-    mesh.quaternion.copy(q);
+    _scratchVec.copy(dir).normalize();
+    _scratchQuat.setFromUnitVectors(localAxis, _scratchVec);
+    mesh.quaternion.copy(_scratchQuat);
 }
 
 // ============================================================
@@ -3107,11 +3175,7 @@ class Door {
             if (!onAptSide) continue;
             // Door slams into them — deal 1 damage with door-direction impulse
             const killed = enemy.takeDamage(game.sound, knockDir.clone(), colliders);
-            if (killed) {
-                game.enemyManager.killCount++;
-                game.ui.updateKillCounter(game.enemyManager.killCount, game.enemyManager.totalEnemies);
-                if (game.tacticalAI) game.tacticalAI.onEnemyKilled(game);
-            }
+            if (killed) game.registerKill();
         }
     }
 
@@ -4348,13 +4412,13 @@ class Enemy {
             mesh.position.set(mx, my, mz);
 
             // Orient along the axis between particles
-            const dir = new THREE.Vector3(
+            _scratchVec2.set(
                 pB.pos.x - pA.pos.x,
                 pB.pos.y - pA.pos.y,
                 pB.pos.z - pA.pos.z
             );
-            if (dir.lengthSq() > 0.0001) {
-                orientMeshAlongAxis(mesh, dir, new THREE.Vector3(0, 1, 0));
+            if (_scratchVec2.lengthSq() > 0.0001) {
+                orientMeshAlongAxis(mesh, _scratchVec2, _axisY);
             }
         };
 
@@ -4388,7 +4452,7 @@ class Enemy {
         placeBetween(this.rightShin, p.rKnee, p.rFoot);
 
         // Weapon: orient along arm direction (shoulder → hand)
-        const armDir = new THREE.Vector3(
+        _scratchVec2.set(
             p.rHand.pos.x - p.rShoulder.pos.x,
             p.rHand.pos.y - p.rShoulder.pos.y,
             p.rHand.pos.z - p.rShoulder.pos.z
@@ -4398,8 +4462,8 @@ class Enemy {
             Math.max(p.rHand.pos.y, 0.05),
             p.rHand.pos.z - gz
         );
-        if (armDir.lengthSq() > 0.0001) {
-            orientMeshAlongAxis(this.weapon, armDir, new THREE.Vector3(0, -1, 0));
+        if (_scratchVec2.lengthSq() > 0.0001) {
+            orientMeshAlongAxis(this.weapon, _scratchVec2, _axisNegY);
         }
     }
 
@@ -4887,6 +4951,16 @@ class Enemy {
         }
     }
 
+    // Shared walk/run leg animation
+    animateWalk(phase, amplitude) {
+        this.leftLeg.rotation.x = Math.sin(phase) * amplitude;
+        this.rightLeg.rotation.x = -Math.sin(phase) * amplitude;
+        if (this.leftShin) {
+            this.leftShin.rotation.x = Math.sin(phase) * amplitude;
+            this.rightShin.rotation.x = -Math.sin(phase) * amplitude;
+        }
+    }
+
     canSeePlayer(playerPos, doorOpen, game) {
         // Can only see player if the apartment door is open
         if (!doorOpen) return false;
@@ -4897,50 +4971,20 @@ class Enemy {
             if (aptLamps.length > 0 && aptLamps.every(l => l.destroyed)) return false;
         }
 
-        const enemyPos = new THREE.Vector3(
-            this.group.position.x,
-            1.5,
-            this.group.position.z
-        );
-        const dist = enemyPos.distanceTo(playerPos);
-        if (dist >= 15) return false;
-
-        const ex = enemyPos.x, ez = enemyPos.z;
+        const ex = this.group.position.x, ez = this.group.position.z;
         const px = playerPos.x, pz = playerPos.z;
-        const dx = px - ex, dz = pz - ez;
-        const len = Math.sqrt(dx * dx + dz * dz);
+        const ddx = px - ex, ddz = pz - ez;
+        const distSq = ddx * ddx + ddz * ddz;
+        if (distSq >= 225) return false; // 15^2
+        const len = Math.sqrt(distSq);
         if (len < 0.01) return true;
 
-        const dirX = dx / len, dirZ = dz / len;
-
-        // Helper: 2D ray-AABB slab test
-        const rayHitsAABB = (col) => {
-            let tmin = -Infinity, tmax = Infinity;
-            if (Math.abs(dirX) > 1e-8) {
-                let t1 = (col.minX - ex) / dirX;
-                let t2 = (col.maxX - ex) / dirX;
-                if (t1 > t2) { const tmp = t1; t1 = t2; t2 = tmp; }
-                tmin = Math.max(tmin, t1);
-                tmax = Math.min(tmax, t2);
-            } else {
-                if (ex < col.minX || ex > col.maxX) return false;
-            }
-            if (Math.abs(dirZ) > 1e-8) {
-                let t1 = (col.minZ - ez) / dirZ;
-                let t2 = (col.maxZ - ez) / dirZ;
-                if (t1 > t2) { const tmp = t1; t1 = t2; t2 = tmp; }
-                tmin = Math.max(tmin, t1);
-                tmax = Math.min(tmax, t2);
-            } else {
-                if (ez < col.minZ || ez > col.maxZ) return false;
-            }
-            return tmin <= tmax && tmax > 0 && tmin < len;
-        };
+        const dirX = ddx / len, dirZ = ddz / len;
 
         // Wall raycast — check if any wall AABB blocks line of sight
         if (game && game.level && game.level.colliders) {
             for (const col of game.level.colliders) {
-                if (rayHitsAABB(col)) return false;
+                if (rayHitsAABB2D(ex, ez, dirX, dirZ, col, len)) return false;
             }
         }
 
@@ -4948,29 +4992,15 @@ class Enemy {
         if (game && game.doors) {
             for (const door of game.doors) {
                 if (door.destroyed || door.isOpen) continue;
-                if (rayHitsAABB(door.collider)) return false;
+                if (rayHitsAABB2D(ex, ez, dirX, dirZ, door.collider, len)) return false;
             }
         }
 
         return true;
     }
 
-    // Resolve enemy position against wall colliders
     resolveCollisions(colliders) {
-        const px = this.group.position.x;
-        const pz = this.group.position.z;
-        let nx = px, nz = pz;
-        for (let iter = 0; iter < 3; iter++) {
-            for (const col of colliders) {
-                if (!col) continue;
-                if (col.intersectsSphere(nx, nz, this.radius)) {
-                    const push = col.resolve(nx, nz, this.radius);
-                    if (push) { nx += push.x; nz += push.z; }
-                }
-            }
-        }
-        this.group.position.x = nx;
-        this.group.position.z = nz;
+        this._resolveAgainst(colliders);
     }
 
     update(dt, playerPos, game, doorOpen, colliders) {
@@ -4994,9 +5024,7 @@ class Enemy {
             && this.state !== ENEMY_STATE.PLAYING_DEAD) {
             const intel = game.tacticalAI ? game.tacticalAI.intelligence : 50;
             if (intel <= 30) {
-                const alive = game.enemyManager.enemies.filter(e =>
-                    e.state !== ENEMY_STATE.DEAD && e.state !== ENEMY_STATE.PLAYING_DEAD);
-                if (alive.length === 1 && alive[0] === this) {
+                if (game.enemyManager.aliveCount === 1 && this.state !== ENEMY_STATE.DEAD && this.state !== ENEMY_STATE.PLAYING_DEAD) {
                     const dx = playerPos.x - this.group.position.x;
                     const dz = playerPos.z - this.group.position.z;
                     if (Math.sqrt(dx * dx + dz * dz) < 5) {
@@ -5166,11 +5194,7 @@ class Enemy {
                 if (rdist > 1.5) {
                     this.moveToward(playerPos.x, playerPos.z, this.rushSpeed, dt, colliders);
                     // Leg animation
-                    const walkPhase = this.stateTimer * 8;
-                    this.leftLeg.rotation.x = Math.sin(walkPhase) * 0.5;
-                    this.rightLeg.rotation.x = -Math.sin(walkPhase) * 0.5;
-                    this.leftShin.rotation.x = Math.sin(walkPhase) * 0.5;
-                    this.rightShin.rotation.x = -Math.sin(walkPhase) * 0.5;
+                    this.animateWalk(this.stateTimer * 8, 0.5);
                 }
                 this.shootTimer += dt;
                 if (this.shootTimer > 2.0) {
@@ -5191,11 +5215,7 @@ class Enemy {
                 if (!this.isInCover && this.moveTarget) {
                     const arrived = this.moveToward(this.moveTarget.x, this.moveTarget.z, this.moveSpeed, dt, colliders);
                     // Walk animation
-                    const walkPhase = this.stateTimer * 6;
-                    this.leftLeg.rotation.x = Math.sin(walkPhase) * 0.4;
-                    this.rightLeg.rotation.x = -Math.sin(walkPhase) * 0.4;
-                    this.leftShin.rotation.x = Math.sin(walkPhase) * 0.4;
-                    this.rightShin.rotation.x = -Math.sin(walkPhase) * 0.4;
+                    this.animateWalk(this.stateTimer * 6, 0.4);
                     if (arrived) {
                         this.isInCover = true;
                         this.coverPeekState = 'hidden';
@@ -5273,11 +5293,7 @@ class Enemy {
                     }
 
                     // Walk animation
-                    const walkPhase = this.stateTimer * 8;
-                    this.leftLeg.rotation.x = Math.sin(walkPhase) * 0.5;
-                    this.rightLeg.rotation.x = -Math.sin(walkPhase) * 0.5;
-                    this.leftShin.rotation.x = Math.sin(walkPhase) * 0.5;
-                    this.rightShin.rotation.x = -Math.sin(walkPhase) * 0.5;
+                    this.animateWalk(this.stateTimer * 8, 0.5);
 
                     if (arrived) {
                         this.flankPathIndex++;
@@ -5308,11 +5324,7 @@ class Enemy {
                         this.moveSpeed * 1.2, dt, colliders);
 
                     // Walk backward animation
-                    const walkPhase = this.stateTimer * 5;
-                    this.leftLeg.rotation.x = Math.sin(walkPhase) * 0.3;
-                    this.rightLeg.rotation.x = -Math.sin(walkPhase) * 0.3;
-                    this.leftShin.rotation.x = Math.sin(walkPhase) * 0.3;
-                    this.rightShin.rotation.x = -Math.sin(walkPhase) * 0.3;
+                    this.animateWalk(this.stateTimer * 5, 0.3);
                 }
 
                 // Shoot every 2-3s from distance
@@ -5397,11 +5409,7 @@ class Enemy {
                         const rushSpd = this.rushSpeed * 1.3;
                         this.moveToward(playerPos.x, playerPos.z, rushSpd, dt, colliders);
                         // Run animation
-                        const walkPhase = this.stateTimer * 10;
-                        this.leftLeg.rotation.x = Math.sin(walkPhase) * 0.6;
-                        this.rightLeg.rotation.x = -Math.sin(walkPhase) * 0.6;
-                        this.leftShin.rotation.x = Math.sin(walkPhase) * 0.6;
-                        this.rightShin.rotation.x = -Math.sin(walkPhase) * 0.6;
+                        this.animateWalk(this.stateTimer * 10, 0.6);
                     }
 
                     // Shoot every 1-1.5s
@@ -5590,8 +5598,7 @@ class Enemy {
                 this.leftArm.rotation.z = -1.5 + Math.sin(this.stateTimer * 12) * 0.5;
                 this.rightArm.rotation.z = 1.5 + Math.cos(this.stateTimer * 12) * 0.5;
                 // Running legs
-                this.leftLeg.rotation.x = Math.sin(this.stateTimer * 10) * 0.7;
-                this.rightLeg.rotation.x = -Math.sin(this.stateTimer * 10) * 0.7;
+                this.animateWalk(this.stateTimer * 10, 0.7);
                 // Calm down after 6s
                 if (this.stateTimer > 6) { this.state = ENEMY_STATE.SURRENDERING; this.stateTimer = 0; }
                 break;
@@ -5613,8 +5620,7 @@ class Enemy {
                         this.dragTarget.group.position.z = this.group.position.z + 0.5;
                     }
                     // Walk anim
-                    this.leftLeg.rotation.x = Math.sin(this.stateTimer * 5) * 0.3;
-                    this.rightLeg.rotation.x = -Math.sin(this.stateTimer * 5) * 0.3;
+                    this.animateWalk(this.stateTimer * 5, 0.3);
                 } else {
                     this.state = ENEMY_STATE.ATTACKING; this.stateTimer = 0;
                 }
@@ -5705,8 +5711,7 @@ class Enemy {
         // #37 Panic trigger — low intel, many allies dead
         if (this.state === ENEMY_STATE.ATTACKING) {
             const intel = game.tacticalAI ? game.tacticalAI.intelligence : 50;
-            const alive = game.enemyManager.enemies.filter(e => e.state !== ENEMY_STATE.DEAD && e.state !== ENEMY_STATE.PLAYING_DEAD);
-            if (intel < 25 && alive.length <= 3 && Math.random() < 0.003) {
+            if (intel < 25 && game.enemyManager.aliveCount <= 3 && Math.random() < 0.003) {
                 this.state = ENEMY_STATE.PANIC; this.stateTimer = 0; this.panicTimer = 0;
                 if (game.sound) game.sound.playEnemyVoice('panic');
             }
@@ -5808,6 +5813,7 @@ class EnemyManager {
         this.enemies = [];
         this.killCount = 0;
         this.totalEnemies = 0;
+        this.aliveCount = 0;
 
         // Spawn 3-4 enemies per apartment, spread across rooms
         const allTypes = ['regular','armored','shotgunner','sniper'];
@@ -5843,6 +5849,7 @@ class EnemyManager {
             }
             this.totalEnemies += enemyCount;
         }
+        this.aliveCount = this.totalEnemies;
     }
 
     update(dt, playerPos, game, doors, colliders) {
@@ -5876,34 +5883,29 @@ class EnemyManager {
             if (enemy.state === ENEMY_STATE.DEAD) continue;
             const p = enemy.group.position;
             if (enemy.ragdollActive) {
-                // Ragdolled enemy — wider, shorter bounding box, no headshot zone
-                const box = new THREE.Box3(
-                    new THREE.Vector3(p.x - 0.8, p.y, p.z - 0.8),
-                    new THREE.Vector3(p.x + 0.8, p.y + 0.6, p.z + 0.8)
+                _scratchBox.set(
+                    _scratchBoxMin.set(p.x - 0.8, p.y, p.z - 0.8),
+                    _scratchBoxMax.set(p.x + 0.8, p.y + 0.6, p.z + 0.8)
                 );
-                if (raycaster.ray.intersectsBox(box)) {
-                    const origin = raycaster.ray.origin;
-                    const dist = origin.distanceTo(new THREE.Vector3(p.x, p.y + 0.3, p.z));
+                if (raycaster.ray.intersectsBox(_scratchBox)) {
+                    const dist = raycaster.ray.origin.distanceTo(_scratchVec3.set(p.x, p.y + 0.3, p.z));
                     hits.push({ enemy, dist, headshot: false, hitZone: 'body' });
                 }
             } else {
-                // Standing enemy — full body box first, then check if headshot
-                const fullBox = new THREE.Box3(
-                    new THREE.Vector3(p.x - 0.3, p.y, p.z - 0.2),
-                    new THREE.Vector3(p.x + 0.3, p.y + 1.9, p.z + 0.2)
+                _scratchBox.set(
+                    _scratchBoxMin.set(p.x - 0.3, p.y, p.z - 0.2),
+                    _scratchBoxMax.set(p.x + 0.3, p.y + 1.9, p.z + 0.2)
                 );
-                if (raycaster.ray.intersectsBox(fullBox)) {
-                    const origin = raycaster.ray.origin;
-                    // Check head box for headshot bonus
-                    const headBox = new THREE.Box3(
-                        new THREE.Vector3(p.x - 0.15, p.y + 1.55, p.z - 0.15),
-                        new THREE.Vector3(p.x + 0.15, p.y + 1.94, p.z + 0.15)
+                if (raycaster.ray.intersectsBox(_scratchBox)) {
+                    _scratchBox.set(
+                        _scratchBoxMin.set(p.x - 0.15, p.y + 1.55, p.z - 0.15),
+                        _scratchBoxMax.set(p.x + 0.15, p.y + 1.94, p.z + 0.15)
                     );
-                    if (raycaster.ray.intersectsBox(headBox)) {
-                        const dist = origin.distanceTo(new THREE.Vector3(p.x, p.y + 1.75, p.z));
+                    if (raycaster.ray.intersectsBox(_scratchBox)) {
+                        const dist = raycaster.ray.origin.distanceTo(_scratchVec3.set(p.x, p.y + 1.75, p.z));
                         hits.push({ enemy, dist, headshot: true, hitZone: 'head' });
                     } else {
-                        const dist = origin.distanceTo(new THREE.Vector3(p.x, p.y + 1.0, p.z));
+                        const dist = raycaster.ray.origin.distanceTo(_scratchVec3.set(p.x, p.y + 1.0, p.z));
                         hits.push({ enemy, dist, headshot: false, hitZone: 'body' });
                     }
                 }
@@ -7043,7 +7045,24 @@ class Game {
         this._hitMarkGeo = new THREE.PlaneGeometry(0.05, 0.05);
         this._bloodDropGeo = new THREE.PlaneGeometry(0.06, 0.06);
         this._bloodParticleGeo = new THREE.SphereGeometry(0.03, 3, 2);
-        // Pre-generated blood textures (pool of 8)
+        this._tracerGeo = new THREE.SphereGeometry(0.01, 3, 2);
+        this._tracerMat = new THREE.MeshBasicMaterial({ color: 0xffcc44 });
+
+        // Cached DOM elements (avoid getElementById every frame)
+        this._filmGrainEl = document.getElementById('filmGrain');
+        this._timerEl = document.getElementById('timerHUD');
+        this._lastTimerSec = -1;
+
+        // Cached collider array (reused to avoid per-frame spread allocation)
+        this._allColliders = [];
+
+        // Pre-generated blood pool textures (pool of 6)
+        this._bloodPoolTextures = [];
+        for (let i = 0; i < 6; i++) {
+            this._bloodPoolTextures.push(this._genBloodPoolTex());
+        }
+
+        // Pre-generated blood textures (pool of 6)
         this._bloodSplatTextures = [];
         this._bloodDropTextures = [];
         for (let i = 0; i < 6; i++) {
@@ -7075,6 +7094,14 @@ class Game {
                     }
                 }
             }
+        }
+
+        // Build lookup maps for O(1) lamp/door access in update loop
+        this._flickeringSet = new Set(this.flickeringLights.map(fl => fl.light));
+        this._doorByIndex = new Map(this.doors.map(d => [d.index, d]));
+        this._lampByLight = new Map();
+        if (this.level.lamps) {
+            for (const l of this.level.lamps) this._lampByLight.set(l.light, l);
         }
 
         // === NEW: Spawn 70-feature objects ===
@@ -7373,15 +7400,14 @@ class Game {
             pelletDir.z += (Math.random() - 0.5) * spread;
             pelletDir.normalize();
 
-            const ray = new THREE.Raycaster(
-                this.camera.position.clone(), pelletDir, 0.1, 50
-            );
+            _scratchRay.set(this.camera.position, pelletDir);
+            _scratchRay.near = 0.1;
+            _scratchRay.far = 50;
+            const ray = _scratchRay;
 
             // #3 Bullet tracer — visible line
             if (i === 0 || wt === 'sniper') { // Only first pellet (or all for sniper)
-                const tracerGeo = new THREE.SphereGeometry(0.01, 3, 2);
-                const tracerMat = new THREE.MeshBasicMaterial({ color: 0xffcc44 });
-                const tracerMesh = new THREE.Mesh(tracerGeo, tracerMat);
+                const tracerMesh = new THREE.Mesh(this._tracerGeo, this._tracerMat);
                 tracerMesh.position.copy(this.camera.position);
                 this.scene.add(tracerMesh);
                 this.tracers.push({
@@ -7420,11 +7446,7 @@ class Game {
                     const enemyPos = hit.enemy.group.position.clone();
                     enemyPos.y = hit.headshot ? 1.7 : 1.2;
                     this.addBloodSplat(enemyPos, pelletDir.clone(), hit.headshot);
-                    if (killed) {
-                        this.enemyManager.killCount++;
-                        this.ui.updateKillCounter(this.enemyManager.killCount, this.enemyManager.totalEnemies);
-                        if (this.tacticalAI) this.tacticalAI.onEnemyKilled(this);
-                    }
+                    if (killed) this.registerKill();
                 }
                 hitEnemy = true;
 
@@ -7488,8 +7510,8 @@ class Game {
                 let canisterHit = false;
                 for (const can of this.gasCanisters) {
                     if (can.exploded) continue;
-                    const canBox = new THREE.Box3().setFromCenterAndSize(can.position, new THREE.Vector3(0.3, 0.5, 0.3));
-                    if (ray.ray.intersectsBox(canBox)) {
+                    _scratchBox.setFromCenterAndSize(can.position, _scratchVec3.set(0.3, 0.5, 0.3));
+                    if (ray.ray.intersectsBox(_scratchBox)) {
                         can.exploded = true;
                         this.scene.remove(can.mesh);
                         this.scene.remove(can.light);
@@ -7505,8 +7527,8 @@ class Game {
             let hostageHit = false;
             for (const h of this.hostages) {
                 if (!h.alive) continue;
-                const hBox = new THREE.Box3().setFromCenterAndSize(h.position, new THREE.Vector3(0.4, 1.8, 0.4));
-                if (ray.ray.intersectsBox(hBox)) {
+                _scratchBox.setFromCenterAndSize(h.position, _scratchVec3.set(0.4, 1.8, 0.4));
+                if (ray.ray.intersectsBox(_scratchBox)) {
                     h.alive = false;
                     h.group.rotation.x = Math.PI / 2; h.group.position.y = 0.2;
                     this.hostileKillPenalty += 500;
@@ -7521,10 +7543,9 @@ class Game {
             let dogHit = false;
             for (const dog of this.dogs) {
                 if (!dog.alive) continue;
-                const dBox = new THREE.Box3().setFromCenterAndSize(
-                    dog.group.position.clone().add(new THREE.Vector3(0, 0.3, 0)),
-                    new THREE.Vector3(0.3, 0.5, 0.7));
-                if (ray.ray.intersectsBox(dBox)) {
+                _scratchVec3.copy(dog.group.position).add(_scratchVec2.set(0, 0.3, 0));
+                _scratchBox.setFromCenterAndSize(_scratchVec3, _scratchVec2.set(0.3, 0.5, 0.7));
+                if (ray.ray.intersectsBox(_scratchBox)) {
                     dog.hp--;
                     if (dog.hp <= 0) {
                         dog.alive = false;
@@ -7541,8 +7562,8 @@ class Game {
             let winHit = false;
             for (const win of this.brokenWindows) {
                 if (win.broken) continue;
-                const wBox = new THREE.Box3().setFromCenterAndSize(win.position, new THREE.Vector3(0.2, 0.6, 0.8));
-                if (ray.ray.intersectsBox(wBox)) {
+                _scratchBox.setFromCenterAndSize(win.position, _scratchVec3.set(0.2, 0.6, 0.8));
+                if (ray.ray.intersectsBox(_scratchBox)) {
                     if (!win.cracked) {
                         // #43 Spider-web crack effect — darken and add lines
                         win.cracked = true;
@@ -7575,8 +7596,8 @@ class Game {
             let pipeHit = false;
             for (const pipe of this.waterPipes) {
                 if (pipe.burst) continue;
-                const pBox = new THREE.Box3().setFromCenterAndSize(pipe.position, new THREE.Vector3(0.1, 3, 0.1));
-                if (ray.ray.intersectsBox(pBox)) {
+                _scratchBox.setFromCenterAndSize(pipe.position, _scratchVec3.set(0.1, 3, 0.1));
+                if (ray.ray.intersectsBox(_scratchBox)) {
                     pipe.burst = true;
                     if (this.sound) this.sound.playPipeBurst();
                     pipeHit = true;
@@ -7589,9 +7610,8 @@ class Game {
             let furnHit = false;
             for (const furn of this.furniture) {
                 if (furn.destroyed) continue;
-                const box = new THREE.Box3().setFromCenterAndSize(
-                    furn.mesh.position, new THREE.Vector3(furn.w, furn.h, furn.d));
-                if (ray.ray.intersectsBox(box)) {
+                _scratchBox.setFromCenterAndSize(furn.mesh.position, _scratchVec3.set(furn.w, furn.h, furn.d));
+                if (ray.ray.intersectsBox(_scratchBox)) {
                     furn.hp--;
                     this.addHitMark(furn.mesh.position.clone(), new THREE.Vector3(0, 1, 0));
                     if (furn.hp <= 0) this.destroyFurniture(furn, pelletDir.clone());
@@ -7617,32 +7637,16 @@ class Game {
             // Check wall hits (AABB ray intersection — fast, no scene raycast)
             {
                 let bestT = 50;
-                let bestNormal = null;
+                let bestNX = 0, bestNZ = 0;
+                let wallHitFound = false;
                 const ox = this.camera.position.x, oz = this.camera.position.z;
                 const dx = pelletDir.x, dz = pelletDir.z;
                 for (const col of this.level.colliders) {
-                    // Ray-AABB slab test (2D XZ)
-                    let tmin = 0, tmax = bestT;
-                    if (Math.abs(dx) > 0.001) {
-                        let t1 = (col.minX - ox) / dx, t2 = (col.maxX - ox) / dx;
-                        if (t1 > t2) { const tmp = t1; t1 = t2; t2 = tmp; }
-                        tmin = Math.max(tmin, t1); tmax = Math.min(tmax, t2);
-                    } else if (ox < col.minX || ox > col.maxX) continue;
-                    if (Math.abs(dz) > 0.001) {
-                        let t1 = (col.minZ - oz) / dz, t2 = (col.maxZ - oz) / dz;
-                        if (t1 > t2) { const tmp = t1; t1 = t2; t2 = tmp; }
-                        tmin = Math.max(tmin, t1); tmax = Math.min(tmax, t2);
-                    } else if (oz < col.minZ || oz > col.maxZ) continue;
-                    if (tmin <= tmax && tmin > 0.1 && tmin < bestT) {
-                        bestT = tmin;
-                        const hx = ox + dx * tmin, hz = oz + dz * tmin;
-                        if (Math.abs(hx - col.minX) < 0.05) bestNormal = new THREE.Vector3(-1, 0, 0);
-                        else if (Math.abs(hx - col.maxX) < 0.05) bestNormal = new THREE.Vector3(1, 0, 0);
-                        else if (Math.abs(hz - col.minZ) < 0.05) bestNormal = new THREE.Vector3(0, 0, -1);
-                        else bestNormal = new THREE.Vector3(0, 0, 1);
-                    }
+                    const hit = rayAABB2D(ox, oz, dx, dz, col, bestT);
+                    if (hit) { bestT = hit.t; bestNX = hit.normalX; bestNZ = hit.normalZ; wallHitFound = true; }
                 }
-                if (bestNormal) {
+                if (wallHitFound) {
+                    const bestNormal = _scratchVec2.set(bestNX, 0, bestNZ);
                     const hitPoint = new THREE.Vector3(ox + dx * bestT, this.camera.position.y, oz + dz * bestT);
                     this.addHitMark(hitPoint, bestNormal);
 
@@ -7683,11 +7687,11 @@ class Game {
                     // Wall penetration — weapon-dependent
                     const penDepth = wt === 'sniper' ? 0.5 : (wt === 'pistol' ? 0.25 : 0);
                     if (penDepth > 0) {
-                        const penRay = new THREE.Raycaster(
-                            hitPoint.clone().addScaledVector(pelletDir, penDepth),
-                            pelletDir, 0.01, 30
-                        );
-                        const penHits = this.enemyManager.checkHits(penRay);
+                        _scratchVec3.copy(hitPoint).addScaledVector(pelletDir, penDepth);
+                        _scratchRay.set(_scratchVec3, pelletDir);
+                        _scratchRay.near = 0.01;
+                        _scratchRay.far = 30;
+                        const penHits = this.enemyManager.checkHits(_scratchRay);
                         if (penHits.length > 0) {
                             const penHit = penHits[0];
                             if (!damagedThisShot.has(penHit.enemy)) {
@@ -7698,12 +7702,7 @@ class Game {
                                         this.sound, pelletDir.clone(), this.level.colliders,
                                         { headshot: false, weaponType: wt, hitZone: 'body' }
                                     );
-                                    if (killed) {
-                                        this.enemyManager.killCount++;
-                                        this.shotsHit++;
-                                        this.ui.updateKillCounter(this.enemyManager.killCount, this.enemyManager.totalEnemies);
-                                        if (this.tacticalAI) this.tacticalAI.onEnemyKilled(this);
-                                    }
+                                    if (killed) this.registerKill();
                                 }
                             }
                         }
@@ -7857,40 +7856,20 @@ class Game {
         );
 
         // Wall splat — use simple AABB check instead of scene raycast
-        const dir = direction.clone().normalize();
+        _scratchVec.copy(direction).normalize();
         let bestDist = 4;
-        let bestPoint = null;
-        let bestNormal = null;
+        let bestNX = 0, bestNZ = 0;
+        let splatHitFound = false;
+        const ox = position.x, oz = position.z;
         for (const col of this.level.colliders) {
             if (col.maxY < 1) continue;
-            // Simple ray-AABB intersection (2D)
-            const ox = position.x, oz = position.z;
-            let tmin = 0, tmax = bestDist;
-            // X slab
-            if (Math.abs(dir.x) > 0.001) {
-                let t1 = (col.minX - ox) / dir.x, t2 = (col.maxX - ox) / dir.x;
-                if (t1 > t2) { const tmp = t1; t1 = t2; t2 = tmp; }
-                tmin = Math.max(tmin, t1); tmax = Math.min(tmax, t2);
-            } else if (ox < col.minX || ox > col.maxX) continue;
-            // Z slab
-            if (Math.abs(dir.z) > 0.001) {
-                let t1 = (col.minZ - oz) / dir.z, t2 = (col.maxZ - oz) / dir.z;
-                if (t1 > t2) { const tmp = t1; t1 = t2; t2 = tmp; }
-                tmin = Math.max(tmin, t1); tmax = Math.min(tmax, t2);
-            } else if (oz < col.minZ || oz > col.maxZ) continue;
-            if (tmin <= tmax && tmin > 0.1 && tmin < bestDist) {
-                bestDist = tmin;
-                bestPoint = new THREE.Vector3(ox + dir.x * tmin, position.y, oz + dir.z * tmin);
-                // Normal: which face did we hit?
-                const hx = bestPoint.x, hz = bestPoint.z;
-                if (Math.abs(hx - col.minX) < 0.05) bestNormal = new THREE.Vector3(-1, 0, 0);
-                else if (Math.abs(hx - col.maxX) < 0.05) bestNormal = new THREE.Vector3(1, 0, 0);
-                else if (Math.abs(hz - col.minZ) < 0.05) bestNormal = new THREE.Vector3(0, 0, -1);
-                else bestNormal = new THREE.Vector3(0, 0, 1);
-            }
+            const hit = rayAABB2D(ox, oz, _scratchVec.x, _scratchVec.z, col, bestDist);
+            if (hit) { bestDist = hit.t; bestNX = hit.normalX; bestNZ = hit.normalZ; splatHitFound = true; }
         }
 
-        if (bestPoint && bestNormal) {
+        if (splatHitFound) {
+            const bestPoint = new THREE.Vector3(ox + _scratchVec.x * bestDist, position.y, oz + _scratchVec.z * bestDist);
+            const bestNormal = new THREE.Vector3(bestNX, 0, bestNZ);
             const texIdx = headshot ? Math.floor(Math.random() * 3) : 3 + Math.floor(Math.random() * 3);
             const tex = this._bloodSplatTextures[texIdx];
             const size = headshot ? (0.4 + Math.random() * 0.5) : (0.12 + Math.random() * 0.18);
@@ -7928,13 +7907,75 @@ class Game {
 
     addBloodPool(x, z) {
         const size = 0.8 + Math.random() * 0.6;
+        const tex = this._bloodPoolTextures[Math.floor(Math.random() * this._bloodPoolTextures.length)];
+        const geo = new THREE.PlaneGeometry(size, size);
+        const mat = new THREE.MeshBasicMaterial({
+            map: tex, transparent: true, depthWrite: false, side: THREE.DoubleSide
+        });
+        const pool = new THREE.Mesh(geo, mat);
+        pool.position.set(x, 0.02, z);
+        pool.rotation.x = -Math.PI / 2;
+        pool.rotation.z = Math.random() * Math.PI * 2;
+        pool.scale.setScalar(0.2);
+        this.scene.add(pool);
+        this.bloodPools.push({ mesh: pool, life: 60, scale: 0.2, targetScale: 1 });
+        if (this.bloodPools.length > 30) {
+            const old = this.bloodPools.shift();
+            this.scene.remove(old.mesh);
+            old.mesh.geometry.dispose();
+            old.mesh.material.dispose();
+        }
+    }
+
+    registerKill() {
+        this.enemyManager.killCount++;
+        this.enemyManager.aliveCount--;
+        this.shotsHit++;
+        this.ui.updateKillCounter(this.enemyManager.killCount, this.enemyManager.totalEnemies);
+        if (this.tacticalAI) this.tacticalAI.onEnemyKilled(this);
+    }
+
+    applyExplosionDamage(pos) {
+        for (const enemy of this.enemyManager.enemies) {
+            if (enemy.state === ENEMY_STATE.DEAD) continue;
+            const dx = enemy.group.position.x - pos.x;
+            const dz = enemy.group.position.z - pos.z;
+            const dist = Math.sqrt(dx * dx + dz * dz);
+            if (dist < 3) {
+                enemy.hp = 0;
+                _scratchVec.set(dx, 0.5, dz).normalize();
+                const killed = enemy.takeDamage(this.sound, _scratchVec, this.level.colliders);
+                if (killed) this.registerKill();
+            } else if (dist < 5) {
+                _scratchVec.set(dx, 0.3, dz).normalize();
+                const killed = enemy.takeDamage(this.sound, _scratchVec, this.level.colliders);
+                if (killed) this.registerKill();
+            }
+        }
+        const playerDist = this.player.position.distanceTo(pos);
+        if (playerDist < 3) {
+            _scratchVec.copy(pos).sub(this.player.position).normalize();
+            this.damagePlayer(_scratchVec);
+        }
+        this.enemyManager.notifySound(pos.x, pos.z, 25, this.sound, 'gunshot');
+    }
+
+    rebuildColliders() {
+        const arr = this._allColliders;
+        arr.length = this.level.colliders.length;
+        for (let i = 0; i < this.level.colliders.length; i++) arr[i] = this.level.colliders[i];
+        for (const door of this.doors) {
+            const col = door.getCollider();
+            if (col) arr.push(col);
+        }
+    }
+
+    _genBloodPoolTex() {
         const c = document.createElement('canvas');
         c.width = 128; c.height = 128;
         const ctx = c.getContext('2d');
         ctx.clearRect(0, 0, 128, 128);
         const cx = 64, cy = 64;
-
-        // Organic irregular pool shape with bezier curves
         const points = [];
         const nPts = 12 + Math.floor(Math.random() * 6);
         for (let i = 0; i < nPts; i++) {
@@ -7952,13 +7993,8 @@ class Game {
             ctx.quadraticCurveTo(p0.x, p0.y, mx, my);
         }
         ctx.closePath();
-
-        // Multi-layer fill for depth effect
-        // Base: dark coagulated edge
         ctx.fillStyle = 'rgba(35, 2, 2, 0.9)';
         ctx.fill();
-
-        // Inner: wet blood center
         ctx.save();
         ctx.clip();
         const innerGrad = ctx.createRadialGradient(cx, cy, 0, cx, cy, 40);
@@ -7968,16 +8004,12 @@ class Game {
         innerGrad.addColorStop(1, 'rgba(30, 2, 1, 0.3)');
         ctx.fillStyle = innerGrad;
         ctx.fillRect(0, 0, 128, 128);
-
-        // Specular highlight for wet look
         const specGrad = ctx.createRadialGradient(cx - 10, cy - 10, 0, cx, cy, 25);
         specGrad.addColorStop(0, 'rgba(160, 30, 20, 0.25)');
         specGrad.addColorStop(0.3, 'rgba(100, 15, 10, 0.1)');
         specGrad.addColorStop(1, 'rgba(0,0,0,0)');
         ctx.fillStyle = specGrad;
         ctx.fillRect(0, 0, 128, 128);
-
-        // Coagulation blobs near edges
         for (let i = 0; i < 8; i++) {
             const a = Math.random() * Math.PI * 2;
             const d = 20 + Math.random() * 18;
@@ -7986,8 +8018,6 @@ class Game {
             ctx.fillStyle = `rgba(${25 + Math.random()*15|0}, ${Math.random()*4|0}, ${Math.random()*3|0}, 0.6)`;
             ctx.fill();
         }
-
-        // Thin tendrils spreading outward
         for (let i = 0; i < 5 + Math.random() * 4; i++) {
             const a = Math.random() * Math.PI * 2;
             const startR = 30 + Math.random() * 12;
@@ -7996,33 +8026,13 @@ class Game {
             ctx.moveTo(cx + Math.cos(a) * startR, cy + Math.sin(a) * startR);
             const ctrl1x = cx + Math.cos(a + 0.1) * (startR + endR) / 2;
             const ctrl1y = cy + Math.sin(a + 0.1) * (startR + endR) / 2;
-            ctx.quadraticCurveTo(ctrl1x, ctrl1y,
-                cx + Math.cos(a) * endR, cy + Math.sin(a) * endR);
+            ctx.quadraticCurveTo(ctrl1x, ctrl1y, cx + Math.cos(a) * endR, cy + Math.sin(a) * endR);
             ctx.lineWidth = 1 + Math.random() * 2;
             ctx.strokeStyle = `rgba(${40 + Math.random()*20|0}, ${2 + Math.random()*4|0}, 0, 0.5)`;
             ctx.stroke();
         }
         ctx.restore();
-
-        const tex = new THREE.CanvasTexture(c);
-        const geo = new THREE.PlaneGeometry(size, size);
-        const mat = new THREE.MeshBasicMaterial({
-            map: tex, transparent: true, depthWrite: false, side: THREE.DoubleSide
-        });
-        const pool = new THREE.Mesh(geo, mat);
-        pool.position.set(x, 0.02, z);
-        pool.rotation.x = -Math.PI / 2;
-        pool.rotation.z = Math.random() * Math.PI * 2;
-        pool.scale.setScalar(0.2);
-        this.scene.add(pool);
-        this.bloodPools.push({ mesh: pool, life: 60, scale: 0.2, targetScale: 1 });
-        if (this.bloodPools.length > 30) {
-            const old = this.bloodPools.shift();
-            this.scene.remove(old.mesh);
-            old.mesh.geometry.dispose();
-            old.mesh.material.map.dispose();
-            old.mesh.material.dispose();
-        }
+        return new THREE.CanvasTexture(c);
     }
 
     checkVictory() {
@@ -8106,12 +8116,9 @@ class Game {
             }
         }
 
-        // Gather all colliders including doors
-        const allColliders = [...this.level.colliders];
-        for (const door of this.doors) {
-            const col = door.getCollider();
-            if (col) allColliders.push(col);
-        }
+        // Gather all colliders including doors (reuses array)
+        this.rebuildColliders();
+        const allColliders = this._allColliders;
 
         // Sync weapon state to player for breathing/sway
         this.player._isADS = this.weapon.isADS;
@@ -8195,10 +8202,7 @@ class Game {
                     const killed = hit.enemy.takeDamage(this.sound, camDir.clone(), this.level.colliders,
                         { headshot: false, weaponType: 'knife', hitZone: 'body' });
                     if (killed) {
-                        this.enemyManager.killCount++;
-                        this.shotsHit++;
-                        this.ui.updateKillCounter(this.enemyManager.killCount, this.enemyManager.totalEnemies);
-                        if (this.tacticalAI) this.tacticalAI.onEnemyKilled(this);
+                        this.registerKill();
                         if (this.enemyManager.killCount >= this.enemyManager.totalEnemies && !this.killCamActive) {
                             this.triggerKillCam(hit.enemy, this.camera.position.clone(), camDir);
                         }
@@ -8370,7 +8374,7 @@ class Game {
         if (this.level && this.level.lamps) {
             for (const lamp of this.level.lamps) {
                 if (lamp.destroyed) continue;
-                const doorForApt = this.doors.find(d => d.index === lamp.aptIndex);
+                const doorForApt = this._doorByIndex.get(lamp.aptIndex);
                 if (doorForApt && !doorForApt.isOpen && !doorForApt.destroyed) {
                     // Door closed — suppress light so it doesn't bleed through
                     lamp.light.intensity = 0;
@@ -8563,7 +8567,7 @@ class Game {
         const nvMul = this.nvActive ? 1.5 : 1.0;
         for (const fl of this.flickeringLights) {
             // Skip if this light is behind a closed door
-            const flLamp = this.level.lamps ? this.level.lamps.find(l => l.light === fl.light) : null;
+            const flLamp = this._lampByLight.get(fl.light) || null;
             if (flLamp && flLamp._suppressed) { fl.light.intensity = 0; continue; }
             fl.phase += dt * 5;
             if (fl.isOff) {
@@ -8587,9 +8591,9 @@ class Game {
         if (this.level.lights) {
             const clampMax = this.nvActive ? 1.2 : 0.8;
             for (const light of this.level.lights) {
-                if (!this.flickeringLights.find(fl => fl.light === light)) {
+                if (!this._flickeringSet.has(light)) {
                     // Skip if this light belongs to a suppressed lamp
-                    const lamp = this.level.lamps ? this.level.lamps.find(l => l.light === light) : null;
+                    const lamp = this._lampByLight.get(light) || null;
                     if (lamp && (lamp._suppressed || lamp.destroyed || lamp._origIntensity === 0)) continue;
                     // Skip corridor lights (no lamp entry, origIntensity 0)
                     if (!lamp && light.intensity === 0) continue;
@@ -8933,7 +8937,7 @@ class Game {
                     const hit = hits[0];
                     hit.enemy.hp = 1;
                     const killed = hit.enemy.takeDamage(this.sound, camDir.clone(), this.level.colliders, { headshot: false, weaponType: 'bayonet', hitZone: 'body' });
-                    if (killed) { this.enemyManager.killCount++; this.shotsHit++; this.ui.updateKillCounter(this.enemyManager.killCount, this.enemyManager.totalEnemies); }
+                    if (killed) this.registerKill();
                 }
             }
         }
@@ -8990,17 +8994,19 @@ class Game {
         }
 
         // Film grain animation
-        const grain = document.getElementById('filmGrain');
-        if (grain) {
-            grain.style.transform = `translate(${(Math.random()-0.5)*4}px, ${(Math.random()-0.5)*4}px)`;
+        if (this._filmGrainEl) {
+            this._filmGrainEl.style.transform = `translate(${(Math.random()-0.5)*4}px, ${(Math.random()-0.5)*4}px)`;
         }
 
-        // Timer HUD
+        // Timer HUD (update only when seconds change)
         const elapsed = (Date.now() - this.gameStartTime) / 1000;
-        const mins = Math.floor(elapsed / 60);
         const secs = Math.floor(elapsed % 60);
-        document.getElementById('timerHUD').textContent =
-            `${String(mins).padStart(2,'0')}:${String(secs).padStart(2,'0')}`;
+        if (secs !== this._lastTimerSec) {
+            this._lastTimerSec = secs;
+            const mins = Math.floor(elapsed / 60);
+            this._timerEl.textContent =
+                `${String(mins).padStart(2,'0')}:${String(secs).padStart(2,'0')}`;
+        }
 
         // Screen shake
         this.ui.updateShake(dt);
@@ -9031,7 +9037,7 @@ class Game {
                         if (child.isMesh && child.material && child.material.isMeshStandardMaterial) {
                             child._nvOrigEmissive = child.material.emissive.getHex();
                             child._nvOrigEmissiveI = child.material.emissiveIntensity || 0;
-                            child.material.emissive = new THREE.Color(0x00ff00);
+                            child.material.emissive.setHex(0x00ff00);
                             child.material.emissiveIntensity = 0.5;
                         }
                     });
@@ -9060,7 +9066,7 @@ class Game {
                 for (const e of this.enemyManager.enemies) {
                     e.group.traverse(child => {
                         if (child.isMesh && child.material && child._nvOrigEmissive !== undefined) {
-                            child.material.emissive = new THREE.Color(child._nvOrigEmissive);
+                            child.material.emissive.setHex(child._nvOrigEmissive);
                             child.material.emissiveIntensity = child._nvOrigEmissiveI;
                             delete child._nvOrigEmissive;
                             delete child._nvOrigEmissiveI;
@@ -9133,43 +9139,8 @@ class Game {
                     color: 0xff6622, speed: 5, lifetime: 1.0, spread: 2, gravity: -3
                 });
             }
-            // Damage enemies
-            for (const enemy of this.enemyManager.enemies) {
-                if (enemy.state === ENEMY_STATE.DEAD) continue;
-                const dx = enemy.group.position.x - pos.x;
-                const dz = enemy.group.position.z - pos.z;
-                const dist = Math.sqrt(dx * dx + dz * dz);
-                if (dist < 3) {
-                    // Kill
-                    enemy.hp = 0;
-                    const dir = new THREE.Vector3(dx, 0.5, dz).normalize();
-                    const killed = enemy.takeDamage(this.sound, dir, this.level.colliders);
-                    if (killed) {
-                        this.enemyManager.killCount++;
-                        this.shotsHit++;
-                        this.ui.updateKillCounter(this.enemyManager.killCount, this.enemyManager.totalEnemies);
-                        if (this.tacticalAI) this.tacticalAI.onEnemyKilled(this);
-                    }
-                } else if (dist < 5) {
-                    // 1 HP damage
-                    const dir = new THREE.Vector3(dx, 0.3, dz).normalize();
-                    const killed = enemy.takeDamage(this.sound, dir, this.level.colliders);
-                    if (killed) {
-                        this.enemyManager.killCount++;
-                        this.shotsHit++;
-                        this.ui.updateKillCounter(this.enemyManager.killCount, this.enemyManager.totalEnemies);
-                        if (this.tacticalAI) this.tacticalAI.onEnemyKilled(this);
-                    }
-                }
-            }
-            // Player self-damage
-            const playerDist = this.player.position.distanceTo(pos);
-            if (playerDist < 3) {
-                const gDir = pos.clone().sub(this.player.position).normalize();
-                this.damagePlayer(gDir);
-            }
-            // Notify enemies
-            this.enemyManager.notifySound(pos.x, pos.z, 25, this.sound, 'gunshot');
+            // Damage enemies + player
+            this.applyExplosionDamage(pos);
         }
     }
 
@@ -9471,24 +9442,7 @@ class Game {
         if (this.particles) {
             this.particles.emit(pos, 40, { color: 0xff4411, speed: 6, lifetime: 1.2, spread: 2.5, gravity: -3 });
         }
-        for (const enemy of this.enemyManager.enemies) {
-            if (enemy.state === ENEMY_STATE.DEAD) continue;
-            const dx = enemy.group.position.x - pos.x;
-            const dz = enemy.group.position.z - pos.z;
-            const dist = Math.sqrt(dx * dx + dz * dz);
-            if (dist < 3) {
-                enemy.hp = 0;
-                const dir = new THREE.Vector3(dx, 0.5, dz).normalize();
-                const killed = enemy.takeDamage(this.sound, dir, this.level.colliders);
-                if (killed) { this.enemyManager.killCount++; this.shotsHit++; this.ui.updateKillCounter(this.enemyManager.killCount, this.enemyManager.totalEnemies); if (this.tacticalAI) this.tacticalAI.onEnemyKilled(this); }
-            } else if (dist < 5) {
-                const dir = new THREE.Vector3(dx, 0.3, dz).normalize();
-                enemy.takeDamage(this.sound, dir, this.level.colliders);
-            }
-        }
-        const playerDist = this.player.position.distanceTo(pos);
-        if (playerDist < 3) this.damagePlayer(pos.clone().sub(this.player.position).normalize());
-        this.enemyManager.notifySound(pos.x, pos.z, 25, this.sound, 'gunshot');
+        this.applyExplosionDamage(pos);
     }
 
     explodeTripwire(tw) {
@@ -9499,29 +9453,7 @@ class Game {
         if (this.particles) {
             this.particles.emit(pos, 30, { color: 0xff6622, speed: 5, lifetime: 1.0, spread: 2, gravity: -3 });
         }
-        for (const enemy of this.enemyManager.enemies) {
-            if (enemy.state === ENEMY_STATE.DEAD) continue;
-            const dx = enemy.group.position.x - pos.x;
-            const dz = enemy.group.position.z - pos.z;
-            const dist = Math.sqrt(dx * dx + dz * dz);
-            if (dist < 3) {
-                enemy.hp = 0;
-                const dir = new THREE.Vector3(dx, 0.5, dz).normalize();
-                const killed = enemy.takeDamage(this.sound, dir, this.level.colliders);
-                if (killed) {
-                    this.enemyManager.killCount++;
-                    this.shotsHit++;
-                    this.ui.updateKillCounter(this.enemyManager.killCount, this.enemyManager.totalEnemies);
-                    if (this.tacticalAI) this.tacticalAI.onEnemyKilled(this);
-                }
-            } else if (dist < 5) {
-                const dir = new THREE.Vector3(dx, 0.3, dz).normalize();
-                enemy.takeDamage(this.sound, dir, this.level.colliders);
-            }
-        }
-        const playerDist = this.player.position.distanceTo(pos);
-        if (playerDist < 3) this.damagePlayer(pos.clone().sub(this.player.position).normalize());
-        this.enemyManager.notifySound(pos.x, pos.z, 25, this.sound, 'gunshot');
+        this.applyExplosionDamage(pos);
         tw.remove();
     }
 
@@ -9585,12 +9517,8 @@ class Game {
 
             // Update enemies in slow-mo
             const gameDt = dt * this.timeScale;
-            const allColliders = [...this.level.colliders];
-            for (const door of this.doors) {
-                const col = door.getCollider();
-                if (col) allColliders.push(col);
-            }
-            this.enemyManager.update(gameDt, this.player.getPosition3(), this, this.doors, allColliders);
+            this.rebuildColliders();
+            this.enemyManager.update(gameDt, this.player.getPosition3(), this, this.doors, this._allColliders);
 
             if (this.killCamTimer > 2) {
                 this.killCamActive = false;
